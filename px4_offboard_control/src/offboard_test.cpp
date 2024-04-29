@@ -30,22 +30,40 @@ public:
 		vehicle_position_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&OffboardControl::position_callback, this, _1));
 
 		offboard_setpoint_counter_ = 0;
-		x_target = 5;
-		z_target = -5;
+
+		std::vector<float> point = {5., 5., -5.};
+		coordinates.push_back(point);
+		coordinates.emplace_back(std::vector<float>{-5.,5.,-5.});
+		coordinates.emplace_back(std::vector<float>{-5.,-5.,-5.});
+		coordinates.emplace_back(std::vector<float>{5.,-5.,-5.});
+
+		target = 0;
+		threshold = 0.5;
 
 		auto timer_callback = [this]() -> void {
 
 			if (offboard_setpoint_counter_ == 10) {
-				// Change to Offboard mode after 10 setpoints
 				this->publish_vehicle_command(VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
-
-				// Arm the vehicle
 				this->arm();
 			}
 
 			// offboard_control_mode needs to be paired with trajectory_setpoint
 			publish_offboard_control_mode();
 			publish_trajectory_setpoint();
+
+			float vxs = vx*vx;
+			float vys = vy*vy;
+			float vzs = vz*vz;
+			float separation = (float)sqrt(vxs + vys + vzs);
+
+			if (separation < threshold)
+			{
+				target++;
+				if (target > (int)coordinates.size() - 1)
+				{
+					target = 0;
+				}
+			}
 
 			// stop the counter after reaching 11
 			if (offboard_setpoint_counter_ < 11) {
@@ -69,8 +87,9 @@ private:
 	std::atomic<uint64_t> timestamp_;   //!< common synced timestamped
 
 	uint64_t offboard_setpoint_counter_;   //!< counter for the number of setpoints sent
-	float x_target, vx;
-	float z_target, vz;
+	float vx, vy, vz, threshold;
+	std::vector<std::vector<float>> coordinates;
+	int target;
 
 	void position_callback(VehicleLocalPosition position);
 	void publish_offboard_control_mode();
@@ -123,7 +142,7 @@ void OffboardControl::publish_trajectory_setpoint()
 {
 	TrajectorySetpoint msg{};
 	msg.position = {NAN, NAN, NAN};
-	msg.velocity = {vx, 0.0, vz};
+	msg.velocity = {vx, vy, vz};
 	msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
 	trajectory_setpoint_publisher_->publish(msg);
 }
@@ -155,21 +174,27 @@ void OffboardControl::publish_vehicle_command(uint16_t command, float param1, fl
  */
 void OffboardControl::position_callback(VehicleLocalPosition position)
 {
-	float x_position = position.x;
-	float z_position = position.z;
-	vx = x_target - x_position;
-	vz = z_target - z_position;
+
+	vx = coordinates[target][0] - position.x;
+	vy = coordinates[target][1] - position.y;
+	vz = coordinates[target][2] - position.z;
+
 
 	if (abs(vx) > 5)
 	{
 		vx = vx/abs(vx) * 5;
+	}
+	if (abs(vy) > 5)
+	{
+		vy = vy/abs(vy) * 5;
 	}
 	if (abs(vz) > 5)
 	{
 		vz = vz/abs(vz) * 5;
 	}
 
-	RCLCPP_INFO(this->get_logger(), "%.2f", vx);
+	RCLCPP_INFO(this->get_logger(), "Velocity: (%.2f, %.2f, %.2f)", vx, vy, vz);
+
 }
 
 int main(int argc, char *argv[])

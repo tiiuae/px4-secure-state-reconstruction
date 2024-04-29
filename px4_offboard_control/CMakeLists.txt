@@ -17,8 +17,12 @@ find_package(rclcpp REQUIRED)
 add_executable(offboard_test src/offboard_test.cpp)
 ament_target_dependencies(offboard_test rclcpp px4_msgs)
 
+add_executable(ekf_2 src/ekf_2.cpp)
+ament_target_dependencies(ekf_2 rclcpp px4_msgs)
+
 install(TARGETS
   offboard_test
+  ekf_2
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
