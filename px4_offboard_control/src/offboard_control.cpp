@@ -27,33 +27,53 @@ public:
 		trajectory_setpoint_publisher_ = this->create_publisher<TrajectorySetpoint>("/fmu/in/trajectory_setpoint", 10);
 		vehicle_command_publisher_ = this->create_publisher<VehicleCommand>("/fmu/in/vehicle_command", 10);
 
-		vehicle_position_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&OffboardControl::position_callback, this, _1));
+		gt_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position/gt", qos, std::bind(&OffboardControl::gt_callback, this, _1));
+		attacked_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position/attacked", qos, std::bind(&OffboardControl::attacked_callback, this, _1));
+
+		states.push_back(VehicleLocalPosition());
+		states.push_back(VehicleLocalPosition());
 
 		offboard_setpoint_counter_ = 0;
-
 		std::vector<float> point = {5., 5., -5.};
 		coordinates.push_back(point);
-		coordinates.emplace_back(std::vector<float>{-5.,5.,-5.});
-		coordinates.emplace_back(std::vector<float>{-5.,-5.,-5.});
-		coordinates.emplace_back(std::vector<float>{5.,-5.,-5.});
+		coordinates.emplace_back(std::vector<float>{-5., 5., -5.});
+		coordinates.emplace_back(std::vector<float>{-5., -5., -5.});
+		coordinates.emplace_back(std::vector<float>{5., -5., -5.});
 
 		target = 0;
 		threshold = 0.5;
 
-		auto timer_callback = [this]() -> void {
-
-			if (offboard_setpoint_counter_ == 10) {
+		auto timer_callback = [this]() -> void
+		{
+			if (offboard_setpoint_counter_ == 10)
+			{
 				this->publish_vehicle_command(VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
 				this->arm();
 			}
 
-			// offboard_control_mode needs to be paired with trajectory_setpoint
-			publish_offboard_control_mode();
-			publish_trajectory_setpoint();
+			VehicleLocalPosition reference;
+			this->state_merger(reference); // <-- Standard averaging
 
-			float vxs = vx*vx;
-			float vys = vy*vy;
-			float vzs = vz*vz;
+			vx = coordinates[target][0] - reference.x;
+			vy = coordinates[target][1] - reference.y;
+			vz = coordinates[target][2] - reference.z;
+
+			if (abs(vx) > 5)
+			{
+				vx = vx / abs(vx) * 5; // Input in x
+			}
+			if (abs(vy) > 5)
+			{
+				vy = vy / abs(vy) * 5; // Input in y
+			}
+			if (abs(vz) > 5)
+			{
+				vz = vz / abs(vz) * 5; // Input in z
+			}
+
+			float vxs = vx * vx;
+			float vys = vy * vy;
+			float vzs = vz * vz;
 			float separation = (float)sqrt(vxs + vys + vzs);
 
 			if (separation < threshold)
@@ -65,8 +85,12 @@ public:
 				}
 			}
 
-			// stop the counter after reaching 11
-			if (offboard_setpoint_counter_ < 11) {
+			// offboard_control_mode needs to be paired with trajectory_setpoint
+			publish_offboard_control_mode();
+			publish_trajectory_setpoint();
+
+			if (offboard_setpoint_counter_ < 11)
+			{
 				offboard_setpoint_counter_++;
 			}
 		};
@@ -82,19 +106,24 @@ private:
 	rclcpp::Publisher<OffboardControlMode>::SharedPtr offboard_control_mode_publisher_;
 	rclcpp::Publisher<TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
 	rclcpp::Publisher<VehicleCommand>::SharedPtr vehicle_command_publisher_;
-	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr vehicle_position_subscriber;
 
-	std::atomic<uint64_t> timestamp_;   //!< common synced timestamped
+	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr gt_subscriber;
+	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr attacked_subscriber;
 
-	uint64_t offboard_setpoint_counter_;   //!< counter for the number of setpoints sent
+	std::atomic<uint64_t> timestamp_; //!< common synced timestamped
+
+	uint64_t offboard_setpoint_counter_; //!< counter for the number of setpoints sent
 	float vx, vy, vz, threshold;
-	std::vector<std::vector<float>> coordinates;
 	int target;
+	std::vector<std::vector<float>> coordinates;
+	std::vector<VehicleLocalPosition> states;
 
-	void position_callback(VehicleLocalPosition position);
+	void gt_callback(VehicleLocalPosition position);
+	void attacked_callback(VehicleLocalPosition position);
 	void publish_offboard_control_mode();
 	void publish_trajectory_setpoint();
 	void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
+	void state_merger(VehicleLocalPosition& output);
 };
 
 /**
@@ -169,32 +198,39 @@ void OffboardControl::publish_vehicle_command(uint16_t command, float param1, fl
 }
 
 /**
- * @brief Obtain local position of vehicle and set the velocity 
+ * @brief Obtain local position of vehicle at ground truth sensor
  * @param position	Position output from the EKF
  */
-void OffboardControl::position_callback(VehicleLocalPosition position)
+void OffboardControl::gt_callback(VehicleLocalPosition position)
 {
+	states[0] = position;
+}
 
-	vx = coordinates[target][0] - position.x;
-	vy = coordinates[target][1] - position.y;
-	vz = coordinates[target][2] - position.z;
+/**
+ * @brief Obtain local position of vehicle at attacked sensor
+ * @param position	Position output from the EKF
+ */
+void OffboardControl::attacked_callback(VehicleLocalPosition position)
+{
+	states[1] = position;
+}
 
-
-	if (abs(vx) > 5)
+/**
+ * @brief Obtain local position of vehicle at attacked sensor
+ * @param position	Position output from the EKF
+ */
+void OffboardControl::state_merger(VehicleLocalPosition& output)
+{
+	int length = states.size();
+	for (VehicleLocalPosition& entry: states)
 	{
-		vx = vx/abs(vx) * 5;
+		output.x += entry.x;
+		output.y += entry.y;
+		output.z += entry.z;
 	}
-	if (abs(vy) > 5)
-	{
-		vy = vy/abs(vy) * 5;
-	}
-	if (abs(vz) > 5)
-	{
-		vz = vz/abs(vz) * 5;
-	}
-
-	RCLCPP_INFO(this->get_logger(), "Velocity: (%.2f, %.2f, %.2f)", vx, vy, vz);
-
+	output.x /= length;
+	output.y /= length;
+	output.z /= length;
 }
 
 int main(int argc, char *argv[])

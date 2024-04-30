@@ -14,16 +14,26 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 
-add_executable(offboard_test src/offboard_test.cpp)
-ament_target_dependencies(offboard_test rclcpp px4_msgs)
+add_executable(offboard_control src/offboard_control.cpp)
+ament_target_dependencies(offboard_control rclcpp px4_msgs)
 
 add_executable(ekf_2 src/ekf_2.cpp)
 ament_target_dependencies(ekf_2 rclcpp px4_msgs)
 
+add_executable(attacker src/attacker.cpp)
+ament_target_dependencies(attacker rclcpp std_msgs px4_msgs)
+
 install(TARGETS
-  offboard_test
+  offboard_control
   ekf_2
-  DESTINATION lib/${PROJECT_NAME})
+  attacker
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

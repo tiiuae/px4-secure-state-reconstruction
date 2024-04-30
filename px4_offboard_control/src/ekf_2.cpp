@@ -18,25 +18,19 @@ public:
 		rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
 		auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
 
-		ekf_copy_publisher_ = this->create_publisher<VehicleLocalPosition>("/fmu/out/vehicle_local_position_2", qos);
+		gt_ekf_publisher_ = this->create_publisher<VehicleLocalPosition>("/fmu/out/vehicle_local_position/gt", qos);
+		raw_ekf_publisher_ = this->create_publisher<VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
 		vehicle_position_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&EKF2::position_callback, this, _1));
 	}
 
 private:
 
-	rclcpp::Publisher<VehicleLocalPosition>::SharedPtr ekf_copy_publisher_;
+	rclcpp::Publisher<VehicleLocalPosition>::SharedPtr gt_ekf_publisher_;
+	rclcpp::Publisher<VehicleLocalPosition>::SharedPtr raw_ekf_publisher_;
 	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr vehicle_position_subscriber;
 
 	void position_callback(VehicleLocalPosition position);
-	void attack(VehicleLocalPosition& copy);
 };
-
-void EKF2::attack(VehicleLocalPosition& copy)
-{
-	copy.x /= 2;
-	copy.y /= 2;
-	copy.z /= 2;
-}
 
 /**
  * @brief Obtain local position of vehicle and set the velocity 
@@ -46,9 +40,8 @@ void EKF2::position_callback(VehicleLocalPosition position)
 {
 	VehicleLocalPosition ekf2(position);
 
-	attack(ekf2);
-
-	ekf_copy_publisher_->publish(ekf2);
+	gt_ekf_publisher_->publish(ekf2);
+	raw_ekf_publisher_->publish(ekf2);
 }
 
 int main(int argc, char *argv[])
