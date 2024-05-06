@@ -13,6 +13,7 @@ find_package(px4_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(gz-transport13 REQUIRED)
 
 add_executable(offboard_control src/offboard_control.cpp)
 ament_target_dependencies(offboard_control rclcpp px4_msgs)
@@ -23,10 +24,14 @@ ament_target_dependencies(ekf_2 rclcpp px4_msgs)
 add_executable(attacker src/attacker.cpp)
 ament_target_dependencies(attacker rclcpp std_msgs px4_msgs)
 
+add_executable(gz_test src/gz_test.cpp)
+ament_target_dependencies(gz_test rclcpp std_msgs geometry_msgs px4_msgs gz-transport13)
+
 install(TARGETS
   offboard_control
   ekf_2
   attacker
+  gz_test
   DESTINATION lib/${PROJECT_NAME}
 )
 
