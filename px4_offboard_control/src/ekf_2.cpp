@@ -13,14 +13,18 @@ public:
 		auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
 
 		gt_ekf_publisher_ = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/gt", qos);
-		raw_ekf_publisher_ = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
+
+		raw_ekf_publisher_1 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
+		raw_ekf_publisher_2 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
+
 		vehicle_position_subscriber = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&EKF2::position_callback, this, std::placeholders::_1));
 	}
 
 private:
 
 	rclcpp::Publisher<px4_msgs::msg::VehicleLocalPosition>::SharedPtr gt_ekf_publisher_;
-	rclcpp::Publisher<px4_msgs::msg::VehicleLocalPosition>::SharedPtr raw_ekf_publisher_;
+	rclcpp::Publisher<px4_msgs::msg::VehicleLocalPosition>::SharedPtr raw_ekf_publisher_1;
+	rclcpp::Publisher<px4_msgs::msg::VehicleLocalPosition>::SharedPtr raw_ekf_publisher_2;
 	rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr vehicle_position_subscriber;
 
 	void position_callback(px4_msgs::msg::VehicleLocalPosition position);
@@ -35,7 +39,8 @@ void EKF2::position_callback(px4_msgs::msg::VehicleLocalPosition position)
 	px4_msgs::msg::VehicleLocalPosition ekf2(position);
 
 	gt_ekf_publisher_->publish(ekf2);
-	raw_ekf_publisher_->publish(ekf2);
+	raw_ekf_publisher_1->publish(ekf2);
+	raw_ekf_publisher_2->publish(ekf2);
 }
 
 int main(int argc, char *argv[])
