@@ -13,9 +13,8 @@ public:
 		auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
 
 		gt_ekf_publisher_ = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/gt", qos);
-
-		raw_ekf_publisher_1 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
-		raw_ekf_publisher_2 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos);
+		raw_ekf_publisher_1 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw/1", qos);
+		raw_ekf_publisher_2 = this->create_publisher<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw/2", qos);
 
 		vehicle_position_subscriber = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&EKF2::position_callback, this, std::placeholders::_1));
 	}

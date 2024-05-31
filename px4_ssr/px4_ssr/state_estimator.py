@@ -1,7 +1,10 @@
 import rclpy
-# from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.qos import HistoryPolicy, QoSProfile
+import numpy as np
+
 # from rclpy.duration import Duration
 from rclpy.node import Node
+from std_msgs.msg import Float64MultiArray
 from px4_ssr.drone_system import DroneSystem
 
 
@@ -14,13 +17,33 @@ class StateEstimator(Node):
     def __init__(self):
         super().__init__("state_estimator", parameter_overrides=[])
 
-        self.drone = DroneSystem()
-        # print(self.drone.__dict__)
-        print(self.drone.F_cell, "\n", self.drone.O_cell)
+        self.qos_profile = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5)
 
-    # def secure_state_estimator():
-    #
-    #     return Xt_cell, Gamma_set_new
+        self.drone = DroneSystem()
+        self.y_vec = []
+
+        self.sensor_subscriber = self.create_subscription(
+            Float64MultiArray,
+            "/sensor_matrix",
+            self.secure_state_estimator,
+            self.qos_profile,
+        )
+
+    def secure_state_estimator(self, msg: Float64MultiArray):
+        self.update_sensor_matrix(msg)
+        if len(self.y_vec) < self.drone.n:
+            return
+
+        Xt_cell = None
+        Gamma_set_new = None
+
+        return Xt_cell, Gamma_set_new
+
+    def update_sensor_matrix(self, msg: Float64MultiArray):
+        self.y_vec.append(msg.data)
+        if len(self.y_vec) > self.drone.n:
+            self.y_vec = self.y_vec[1:]
+
 
 def main(args=None):
     print("Starting state_estimator node...")
