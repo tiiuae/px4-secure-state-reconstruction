@@ -6,7 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <stdint.h>
 
-#include <chrono>
+/*#include <chrono>*/
 #include <iostream>
 
 using namespace std::chrono;
@@ -110,7 +110,7 @@ private:
 	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr gt_subscriber;
 	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr attacked_subscriber;
 
-	std::atomic<uint64_t> timestamp_; //!< common synced timestamped
+	/*std::atomic<uint64_t> timestamp_; //!< common synced timestamped*/
 
 	uint64_t offboard_setpoint_counter_; //!< counter for the number of setpoints sent
 	float vx, vy, vz, threshold;
