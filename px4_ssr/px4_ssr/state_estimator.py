@@ -1,12 +1,20 @@
 import rclpy
 from rclpy.qos import HistoryPolicy, QoSProfile
 import numpy as np
+import scipy as sc
 # from rclpy.duration import Duration
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from px4_ssr.drone_system import DroneSystem
 from typing import List
 import itertools
+
+class XProb:
+    
+    def __init__(self, x0, A_gamma, gamma):
+        self.x0 = x0
+        self.A_gamma = A_gamma
+        self.gamma = gamma
 
 def nchoosek(v: List[int], k: int) -> List[List[int]]:
     """
@@ -56,7 +64,8 @@ class StateEstimator(Node):
         else:
             comb = nchoosek([i for i in range(1, self.drone.p + 1)], self.drone.p - self.s)
 
-        gamma_set_new = []
+        X0_arr = []
+        Gamma_set_new = []
 
         # comb = [[1, 2, 3], [1, 2, 4], [1, 3, 4], [2, 3, 4]]
         for i in range(len(comb)):
@@ -69,11 +78,40 @@ class StateEstimator(Node):
                 O = self.drone.O_cell[sensor_ind] # (2, 2)
                 Y_tilde = np.array(self.y_vec)[:,sensor_ind].reshape(-1, 1) # (2, 1)
                 O_gamma[self.drone.n * j:self.drone.n * (j + 1), :] = O
-                Y = Y_tilde - self.drone.F_cell[sensor_ind] @ u_vec # (2, 1) - (2, 2) * (2, 1) --> (2, 1)
+                Y = Y_tilde - self.drone.F_cell[sensor_ind] @ self.u_vec # (2, 1) - (2, 2) * (2, 1) --> (2, 1)
                 Y_gamma[self.drone.n * j:self.drone.n * (j + 1)] = Y
 
-        Xt_cell = None
-        Gamma_set_new = None
+            x0_gamma = np.divide(O_gamma, Y_gamma)
+
+            if np.norm(Y_gamma - O_gamma @ x0_gamma) <= 1e-3:
+                Gamma_set_new.append(gamma)
+
+                if np.linalg.matrix_rank(O_gamma) < self.drone.n:
+                    A_gamma = sc.linalg.null_space(O_gamma, rcond = 1e-4)
+                else:
+                    A_gamma = 0
+
+                x0_prob = XProb(x0_gamma, A_gamma, gamma)
+                X0_arr.append(x0_prob)
+
+        Xt_cell: List[XProb] = []
+
+        for i in range(len(X0_arr)):
+            x0 = X0_arr[1].x0
+            A_x0 = X0_arr[i].A_gamma
+            
+            xt = np.zeros_line(x0)
+            A_xt = np.zeros_line(A_x0)
+
+            x_history = np.zeros(self.drone.n, self.drone.n)
+            x_history[:,0] = x0
+
+            for j in range(1, self.drone.n):
+                x_history[:,j] = self.drone.Ad @ x_history[:,j-1] + self.drone.Bd @ self.u_vec[:, j-1]
+
+            xt = x_history[:, self.drone.n - 1]
+
+            xt_prob =
 
         return Xt_cell, Gamma_set_new
 
