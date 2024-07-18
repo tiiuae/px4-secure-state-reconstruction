@@ -21,9 +21,20 @@ public:
 		auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
         attack_flag = false;
 
-		attacked_ekf_publisher_ = this->create_publisher<VehicleLocalPosition>("/fmu/out/vehicle_local_position/attacked", qos);
-		raw_vehicle_position_subscriber = this->create_subscription<VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw", qos, std::bind(&Attacker::position_callback, this, _1));
-		attack_trigger_subscriber = this->create_subscription<Bool>("/attack_trigger", qos, std::bind(&Attacker::attack_trigger, this, _1));
+		attacked_ekf_publisher_ = this->create_publisher<VehicleLocalPosition>(
+            "/fmu/out/vehicle_local_position/attacked",
+            qos
+        );
+		raw_vehicle_position_subscriber = this->create_subscription<VehicleLocalPosition>(
+            "/fmu/out/vehicle_local_position",
+            qos,
+            std::bind(&Attacker::position_callback, this, _1)
+        );
+		attack_trigger_subscriber = this->create_subscription<Bool>(
+            "/attack_trigger",
+            qos,
+            std::bind(&Attacker::attack_trigger, this, _1)
+        );
 	}
 
 private:

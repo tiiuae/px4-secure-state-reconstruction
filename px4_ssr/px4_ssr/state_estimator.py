@@ -2,11 +2,9 @@ import rclpy
 from rclpy.qos import HistoryPolicy, QoSProfile
 import numpy as np
 import scipy as sc
-# from rclpy.duration import Duration
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Empty
 from px4_ssr.drone_system import DroneSystem, SSProblem, SecureStateReconstruct, EPS, TS, nchoosek
-from typing import List
 
 class XProb:
     
@@ -32,8 +30,8 @@ class StateEstimator(Node):
         )
         Bc = np.matrix(
             [
-                [0],
                 [1],
+                [0],
             ]
         )
         Cc = np.matrix(
@@ -55,30 +53,46 @@ class StateEstimator(Node):
         self.y_vec = []
         self.u_vec = []
         self.gamma_set = []
+        self.start_ssr = False
 
+        self.ssr_subscriber = self.create_subscription(
+            Empty,
+            "/start_ssr",
+            self.start_ssr_subscriber,
+            self.qos_profile,
+        )
         self.sensor_subscriber = self.create_subscription(
             Float64MultiArray,
             "/sensor_matrices",
             self.secure_state_estimator,
-            self.qos_profile,
+            10,
         )
         self.input_subscriber = self.create_subscription(
             Float64MultiArray,
             "/input_matrices",
             self.update_input_matrix,
-            self.qos_profile,
+            10,
         )
 
+
+    def start_ssr_subscriber(self, msg: Empty):
+        self.start_ssr = not self.start_ssr
 
     def secure_state_estimator(self, msg: Float64MultiArray):
         self.update_sensor_matrix(msg)
 
+        if not self.start_ssr:
+            return
         # Prerequisite is to have enough past readings
         # if len(self.y_vec) < self.drone.n:
         if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
             return
 
-
+        ss_problem = SSProblem(dtsys_a=self.dtsys_a, dtsys_b=self.dtsys_b, dtsys_c=self.dtsys_c, dtsys_d=self.dtsys_d,
+                               attack_sensor_count=self.s, output_sequence=self.y_vec, input_sequence=self.u_vec)
+        ssr_solution = SecureStateReconstruct(ss_problem)
+        possible_states, corresp_sensor, _ = ssr_solution.solve(1e-3)
+        print(possible_states)
 
         # elif len(self.y_vec) > self.drone.n:
         #     comb = self.gamma_set

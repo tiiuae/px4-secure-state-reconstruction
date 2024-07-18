@@ -30,6 +30,12 @@ ament_target_dependencies(square_velocity_motion rclcpp std_msgs px4_msgs)
 add_executable(square_acceleration_motion src/square_acceleration_motion.cpp)
 ament_target_dependencies(square_acceleration_motion rclcpp std_msgs px4_msgs)
 
+add_executable(sensor_matrix_downsampler src/sensor_matrix_downsampler.cpp)
+ament_target_dependencies(sensor_matrix_downsampler rclcpp std_msgs px4_msgs)
+
+add_executable(offboard_control_xvel src/offboard_control_xvel.cpp)
+ament_target_dependencies(offboard_control_xvel rclcpp std_msgs px4_msgs)
+
 # add_executable(gz_test src/gz_test.cpp)
 # ament_target_dependencies(gz_test rclcpp std_msgs geometry_msgs px4_msgs gz-transport13)
 
@@ -39,6 +45,8 @@ install(TARGETS
     attacker
     square_velocity_motion
     square_acceleration_motion 
+    sensor_matrix_downsampler
+    offboard_control_xvel
     # gz_test
     DESTINATION lib/${PROJECT_NAME}
 )

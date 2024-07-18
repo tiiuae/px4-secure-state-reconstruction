@@ -5,26 +5,37 @@
 
 #include <iostream>
 
-class SensorRepackager : public rclcpp::Node
+class SensorMatrixDownsampler : public rclcpp::Node
 {
 public:
-	SensorRepackager() : Node("sensor_repackager")
+	SensorMatrixDownsampler() : Node("sensor_matrix_downsampler")
 	{
 		rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
 		auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
 
-		sensor_matrix_publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/sensor_matrix", qos);
+		sensor_matrix_publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/sensor_matrices", 10);
 
-        ekf_subscriber_1_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw/1", qos, std::bind(&SensorRepackager::ekf_callback_1, this, std::placeholders::_1));
-		ekf_subscriber_2_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position/raw/2", qos, std::bind(&SensorRepackager::ekf_callback_2, this, std::placeholders::_1));
+        ekf_subscriber_1_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>(
+            "/fmu/out/vehicle_local_position",
+            qos,
+            std::bind(&SensorMatrixDownsampler::ekf_callback_1, this, std::placeholders::_1)
+        );
+		ekf_subscriber_2_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>(
+            "/fmu/out/vehicle_local_position/attacked",
+            qos,
+            std::bind(&SensorMatrixDownsampler::ekf_callback_2, this, std::placeholders::_1)
+        );
+
+        sampling_freq = 20; // In Hertz
 
 		timer_ = this->create_wall_timer(
-			std::chrono::milliseconds(10),
-			std::bind(&SensorRepackager::timerCallback, this));
+			std::chrono::milliseconds(static_cast<long>(1/sampling_freq * 1000)),
+			std::bind(&SensorMatrixDownsampler::timerCallback, this));
 	}
 
 private:
 	px4_msgs::msg::VehicleLocalPosition ekf_1, ekf_2;
+    float sampling_freq;
 
 	rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr sensor_matrix_publisher_;
 	rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr ekf_subscriber_1_, ekf_subscriber_2_;
@@ -39,7 +50,7 @@ private:
 /**
  * @brief Repackage data from sensors into a sensor matrix and publish at predefined interval
 */
-void SensorRepackager::timerCallback()
+void SensorMatrixDownsampler::timerCallback()
 {
 	std_msgs::msg::Float64MultiArray output;
 	std::vector<double> sensor_vector{static_cast<double>(ekf_1.x), static_cast<double>(ekf_1.vx), static_cast<double>(ekf_2.x), static_cast<double>(ekf_2.vx)};
@@ -51,7 +62,7 @@ void SensorRepackager::timerCallback()
  * @brief Obtain and store sensor output from one of the EKFs
  * @param position	Position output from the EKF
  */
-void SensorRepackager::ekf_callback_1(px4_msgs::msg::VehicleLocalPosition position)
+void SensorMatrixDownsampler::ekf_callback_1(px4_msgs::msg::VehicleLocalPosition position)
 {
 	this->ekf_1 = position;
 }
@@ -60,17 +71,17 @@ void SensorRepackager::ekf_callback_1(px4_msgs::msg::VehicleLocalPosition positi
  * @brief Obtain and store sensor output from one of the EKFs
  * @param position	Position output from the EKF
  */
-void SensorRepackager::ekf_callback_2(px4_msgs::msg::VehicleLocalPosition position)
+void SensorMatrixDownsampler::ekf_callback_2(px4_msgs::msg::VehicleLocalPosition position)
 {
 	this->ekf_2 = position;
 }
 
 int main(int argc, char *argv[])
 {
-	std::cout << "Starting sensor_repackager node..." << std::endl;
+	std::cout << "Starting sensor_matrix_downsampler node..." << std::endl;
 	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 	rclcpp::init(argc, argv);
-	rclcpp::spin(std::make_shared<SensorRepackager>());
+	rclcpp::spin(std::make_shared<SensorMatrixDownsampler>());
 
 	rclcpp::shutdown();
 	return 0;
