@@ -194,7 +194,7 @@ class SSProblem:
         self.B = dtsys_b
         self.C = dtsys_c
         self.D = dtsys_d
-        self.io_length = np.array(output_sequence).shape[0]
+        self.io_length = output_sequence.shape[0]
         self.noise_level = measurement_noise_level
 
         self.n = np.shape(dtsys_a)[0]  # dim of states
@@ -325,8 +325,8 @@ class SecureStateReconstruct:
 
     def construct_clean_measurement(self):
         ss_problem = self.problem
-        tilde_y = np.array(ss_problem.tilde_y_his)
-        u_seq = np.array(ss_problem.u_seq)
+        tilde_y = ss_problem.tilde_y_his
+        u_seq = ss_problem.u_seq
         io_length = ss_problem.io_length
         # Check (5) for definition
         # u_list = [input at time t_now - io_length+1, input at time t_now -io_length+2, ..., input at time t_now]
@@ -381,6 +381,7 @@ class SecureStateReconstruct:
         residuals_list = []
         for comb in self.possible_comb:
             # recall obser is in the shape of (io_length, n, p)
+            print(comb)
             obser_matrix = self.vstack_comb(self.obser, comb)
             # print(f'obser_matrix for comb {comb} is \n {obser_matrix}')
             # recall y_his is in the shape of (io_length, p)
