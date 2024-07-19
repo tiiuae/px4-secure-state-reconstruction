@@ -50,7 +50,7 @@ public:
             std::bind(&OffboardControlXvel::ssr_start_callback_, this,
                       std::placeholders::_1));
 
-        sampling_freq = 20;
+        sampling_freq = 20; // in Hertz
         offboard_setpoint_counter_ = 0;
         position = VehicleLocalPosition();
 
@@ -88,10 +88,10 @@ public:
                 }
 
                 time_counter += 1 / sampling_freq;
-                std_msgs::msg::Float64MultiArray output;
+                std_msgs::msg::Float64MultiArray input; // Input vector
                 std::vector<double> sensor_vector{static_cast<double>(vx)};
-                output.data = sensor_vector;
-                input_matrix_publisher_->publish(output);
+                input.data = sensor_vector;
+                input_matrix_publisher_->publish(input);
             }
 
             // offboard_control_mode needs to be paired with trajectory_setpoint

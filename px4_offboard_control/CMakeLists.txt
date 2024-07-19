@@ -15,20 +15,20 @@ find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(gz-transport13 REQUIRED)
 
-add_executable(offboard_control src/offboard_control.cpp)
-ament_target_dependencies(offboard_control rclcpp px4_msgs)
-
-add_executable(ekf_2 src/ekf_2.cpp)
-ament_target_dependencies(ekf_2 rclcpp px4_msgs)
+# add_executable(offboard_control src/offboard_control.cpp)
+# ament_target_dependencies(offboard_control rclcpp px4_msgs)
+#
+# add_executable(ekf_2 src/ekf_2.cpp)
+# ament_target_dependencies(ekf_2 rclcpp px4_msgs)
 
 add_executable(attacker src/attacker.cpp)
 ament_target_dependencies(attacker rclcpp std_msgs px4_msgs)
 
-add_executable(square_velocity_motion src/square_velocity_motion.cpp)
-ament_target_dependencies(square_velocity_motion rclcpp std_msgs px4_msgs)
-
-add_executable(square_acceleration_motion src/square_acceleration_motion.cpp)
-ament_target_dependencies(square_acceleration_motion rclcpp std_msgs px4_msgs)
+# add_executable(square_velocity_motion src/square_velocity_motion.cpp)
+# ament_target_dependencies(square_velocity_motion rclcpp std_msgs px4_msgs)
+#
+# add_executable(square_acceleration_motion src/square_acceleration_motion.cpp)
+# ament_target_dependencies(square_acceleration_motion rclcpp std_msgs px4_msgs)
 
 add_executable(sensor_matrix_downsampler src/sensor_matrix_downsampler.cpp)
 ament_target_dependencies(sensor_matrix_downsampler rclcpp std_msgs px4_msgs)
@@ -40,11 +40,11 @@ ament_target_dependencies(offboard_control_xvel rclcpp std_msgs px4_msgs)
 # ament_target_dependencies(gz_test rclcpp std_msgs geometry_msgs px4_msgs gz-transport13)
 
 install(TARGETS
-    offboard_control
-    ekf_2
+    # offboard_control
+    # ekf_2
     attacker
-    square_velocity_motion
-    square_acceleration_motion 
+    # square_velocity_motion
+    # square_acceleration_motion 
     sensor_matrix_downsampler
     offboard_control_xvel
     # gz_test
