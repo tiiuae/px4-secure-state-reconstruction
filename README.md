@@ -1,3 +1,20 @@
+<!--toc:start-->
+- [Installation](#installation)
+  - [Pre-requisites](#pre-requisites)
+  - [Containerised Deployement](#containerised-deployement)
+    - [Simulation Environment](#simulation-environment)
+    - [MicroXRCE-DDS Agent](#microxrce-dds-agent)
+    - [ROS 2 Development Environment](#ros-2-development-environment)
+  - [Native Deployment (WIP | SKIP FOR NOW)](#native-deployment-wip-skip-for-now)
+- [Running (in Containers)](#running-in-containers)
+  - [Launch Simulation](#launch-simulation)
+  - [Launch DDS Agent](#launch-dds-agent)
+  - [Launch Offboard Control Modules](#launch-offboard-control-modules)
+  - [Launch Secure State Reconstruction Node](#launch-secure-state-reconstruction-node)
+  - [Initiate the Estimator](#initiate-the-estimator)
+- [Updating (in Containers)](#updating-in-containers)
+<!--toc:end-->
+
 # Installation
 
 ## Pre-requisites
