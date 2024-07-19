@@ -207,7 +207,7 @@ ssr_ros_ws ros2 run px4_ssr state_estimator
 
 ```bash
 # in Terminal 5
-ssr_ros_ws ros2 topic -1 pub /start_ssr std_msgs/msg/Empty "{}"
+ssr_ros_ws ros2 topic pub -1 /start_ssr std_msgs/msg/Empty "{}"
 ```
 
 # Updating (in Containers)
