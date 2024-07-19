@@ -5,7 +5,7 @@ import itertools
 from typing import List
 
 EPS: float = 1e-6
-TS: float = 0.01
+TS: float = 0.05
 
 
 def right_shift_row_array(a, shift_amount):
@@ -38,7 +38,7 @@ def nchoosek(v: List[int], k: int) -> List[List[int]]:
 
 
 class DroneSystem:
-    def __init__(self, A=None, B=None, C=None, D=None, ts=0.01):
+    def __init__(self, A=None, B=None, C=None, D=None, ts=0.05):
         self.ts = ts
 
         self._define_state(A, B, C, D)
@@ -230,8 +230,10 @@ class SSProblem:
         # xt is of dimension n \times no. of possible states
         n = dtsys_a.shape[0]
         m = dtsys_b.shape[1]
+        if state_array.ndim !=2:
+            raise KeyError('When propagating state, state_array should be of 2d array')
         if state_array.shape[0] != n:
-            state_array = state_array.transpose()
+            raise KeyError('When propagating state, state_array dimension should be n times number of possible states')
         ut.reshape(m, 1)
         x_new = dtsys_a @ state_array + (dtsys_b @ ut).reshape(
             n, 1
@@ -434,7 +436,7 @@ class SecureStateReconstruct:
 
         current_states_list = []
         for ind in range(possible_states.shape[1]):
-            init_state = possible_states[:, ind]
+            init_state = possible_states[:, ind:ind+1]
             curr_state = self.problem.update_state(
                 self.problem.A, self.problem.B, init_state, self.problem.u_seq
             )
