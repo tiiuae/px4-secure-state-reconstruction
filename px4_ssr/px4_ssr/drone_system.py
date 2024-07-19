@@ -5,7 +5,7 @@ import itertools
 from typing import List
 
 EPS: float = 1e-6
-TS: float = 0.01
+TS: float = 0.05
 
 
 def right_shift_row_array(a, shift_amount):
@@ -38,7 +38,7 @@ def nchoosek(v: List[int], k: int) -> List[List[int]]:
 
 
 class DroneSystem:
-    def __init__(self, A=None, B=None, C=None, D=None, ts=0.01):
+    def __init__(self, A=None, B=None, C=None, D=None, ts=0.05):
         self.ts = ts
 
         self._define_state(A, B, C, D)
