@@ -49,7 +49,7 @@ class StateEstimator(Node):
         self.dtsys_a, self.dtsys_b, self.dtsys_c, self.dtsys_d = SSProblem.convert_ct_to_dt(Ac, Bc, Cc, Dc, TS)
         self.n: int = self.dtsys_a.shape[0]
 
-        self.s = 0
+        self.s = 1
         self.y_vec = []
         self.u_vec = []
         self.gamma_set = []
@@ -94,8 +94,9 @@ class StateEstimator(Node):
         ss_problem = SSProblem(dtsys_a=self.dtsys_a, dtsys_b=self.dtsys_b, dtsys_c=self.dtsys_c, dtsys_d=self.dtsys_d,
                                attack_sensor_count=self.s, output_sequence=np.array(self.y_vec), input_sequence=np.array(u_vec))
         ssr_solution = SecureStateReconstruct(ss_problem)
-        possible_states, corresp_sensor, _ = ssr_solution.solve(np.inf)
+        possible_states, corresp_sensor, residuals_list = ssr_solution.solve(np.inf)
         print('-------------------------------------')
+        print(f'self.s: {self.s}')
         print(f'dtsys_a: {self.dtsys_a}, \n dtsys_b: {self.dtsys_b}, \n dtsys_c:{self.dtsys_c} ')
         print(f'output_sequence:{self.y_vec}')
         print(f'input_sequence:{u_vec}')
@@ -103,6 +104,8 @@ class StateEstimator(Node):
         # print(f'observation matrix: {ssr_solution.obser[:,:,1]}')
         # print(f'clean output sequence" {ssr_solution.y_his}')
         print(f'estimated state: {possible_states}')
+        print(f'corresponding sensors:{corresp_sensor}')
+        print(f'residuals_list:{residuals_list}')
 
     def update_sensor_matrix(self, msg: Float64MultiArray):
         # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]

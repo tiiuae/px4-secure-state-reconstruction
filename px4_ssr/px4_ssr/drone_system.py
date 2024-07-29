@@ -383,7 +383,7 @@ class SecureStateReconstruct:
         residuals_list = []
         for comb in self.possible_comb:
             # recall obser is in the shape of (io_length, n, p)
-            print(comb)
+            # print(comb)
             obser_matrix = self.vstack_comb(self.obser, comb)
             # print(f'obser_matrix for comb {comb} is \n {obser_matrix}')
             # recall y_his is in the shape of (io_length, p)
@@ -398,6 +398,8 @@ class SecureStateReconstruct:
                 residuals = (
                     sc.linalg.norm(obser_matrix @ state - measure_vec, ord=2) ** 2
                 )
+            else:
+                residuals = residuals.item()
 
             if residuals < error_bound:
                 possible_states_list.append(state)
@@ -424,15 +426,15 @@ class SecureStateReconstruct:
             corresp_sensors = None
             print("No possible state found. Consider relax the error bound")
 
-        return possible_states, corresp_sensors, corresp_sensors_list
+        return possible_states, corresp_sensors, residuals_list
 
     def solve(self, error_bound: float = 1.0):
         # Solves for current states
-        possible_states, corresp_sensors, corresp_sensors_list = (
+        possible_states, corresp_sensors, residuals_list = (
             self.solve_initial_state(error_bound)
         )
         if possible_states is None:
-            return None, corresp_sensors, corresp_sensors_list
+            return None, corresp_sensors, residuals_list
 
         current_states_list = []
         for ind in range(possible_states.shape[1]):
@@ -442,7 +444,7 @@ class SecureStateReconstruct:
             )
             current_states_list.append(curr_state)
         current_states = np.hstack(current_states_list)
-        return current_states, corresp_sensors, corresp_sensors_list
+        return current_states, corresp_sensors, residuals_list
 
     @classmethod
     def vstack_comb(
