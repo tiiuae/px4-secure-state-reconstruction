@@ -28,7 +28,7 @@ COPY ./px4_offboard_control /ros_workspace/src/px4_offboard_control
 WORKDIR /ros_workspace
 
 # Build your ROS workspace
-RUN /bin/bash -c '. /opt/ros/humble/setup.bash; colcon build'
+RUN /bin/bash -c '. /opt/ros/humble/setup.bash; colcon build --symlink-install'
 
 # Source the ROS 2 and workspace setup scripts directly in the ENTRYPOINT
 ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && source /ros_workspace/install/setup.bash && exec \"$@\"", "bash"]
