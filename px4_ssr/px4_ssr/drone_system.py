@@ -271,8 +271,8 @@ class SSProblem:
         """
         From continuous time system (Ac, Bc, Cc, Dc) to discrete-time system (A,B,C,D) with ZOH discretization scheme
         """
-        discrete_sys: ct.StateSpace = ct.ss(Ac, Bc, Cc, Dc, ts)
-        # discrete_sys = sys.sample(ts, method="zoh")
+        continuous_sys: ct.StateSpace = ct.ss(Ac, Bc, Cc, Dc)
+        discrete_sys = continuous_sys.sample(ts, method="zoh")
         return (
             discrete_sys.A,
             discrete_sys.B,
