@@ -4,3 +4,5 @@ rosbag2/*
 test_interface_files/*
 .vscode/*
 px4_offboard_control/.clangd
+px4_ssr/px4_ssr/__pycache__/*
+px4_offboard_control/compile_commands.json
