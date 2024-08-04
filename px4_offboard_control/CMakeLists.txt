@@ -14,6 +14,12 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(gz-transport13 REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+    "msg/TimestampedArray.msg"
+    DEPENDENCIES std_msgs
+)
 
 # add_executable(offboard_control src/offboard_control.cpp)
 # ament_target_dependencies(offboard_control rclcpp px4_msgs)
@@ -32,9 +38,14 @@ ament_target_dependencies(attacker rclcpp std_msgs px4_msgs)
 
 add_executable(sensor_matrix_downsampler src/sensor_matrix_downsampler.cpp)
 ament_target_dependencies(sensor_matrix_downsampler rclcpp std_msgs px4_msgs)
+# rosidl_target_interfaces(sensor_matrix_downsampler ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(sensor_matrix_downsampler "${cpp_typesupport_target}")
 
 add_executable(offboard_control_xvel src/offboard_control_xvel.cpp)
 ament_target_dependencies(offboard_control_xvel rclcpp std_msgs px4_msgs)
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(offboard_control_xvel "${cpp_typesupport_target}")
 
 # add_executable(gz_test src/gz_test.cpp)
 # ament_target_dependencies(gz_test rclcpp std_msgs geometry_msgs px4_msgs gz-transport13)
@@ -68,4 +79,6 @@ if(BUILD_TESTING)
     ament_lint_auto_find_test_dependencies()
 endif()
 
+ament_export_dependencies(rosidl_default_runtime)
+ament_export_include_directories(include)
 ament_package()

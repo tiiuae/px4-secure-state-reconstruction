@@ -1,10 +1,10 @@
-#include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <stdint.h>
 
-#include <chrono>
 #include <iostream>
+#include <random>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -30,11 +30,13 @@ public:
             qos,
             std::bind(&Attacker::position_callback, this, _1)
         );
-		attack_trigger_subscriber = this->create_subscription<Bool>(
-            "/attack_trigger",
+		attack_trigger_subscriber = this->create_subscription<std_msgs::msg::Empty>(
+            /*"/attack_trigger",*/
+            "/start_ssr",
             qos,
             std::bind(&Attacker::attack_trigger, this, _1)
         );
+        dist = std::normal_distribution<double>(mean, stddev);
 	}
 
 private:
@@ -43,24 +45,32 @@ private:
 
 	rclcpp::Publisher<VehicleLocalPosition>::SharedPtr attacked_ekf_publisher_;
 	rclcpp::Subscription<VehicleLocalPosition>::SharedPtr raw_vehicle_position_subscriber;
-	rclcpp::Subscription<Bool>::SharedPtr attack_trigger_subscriber;
+	rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr attack_trigger_subscriber;
 
 	void position_callback(VehicleLocalPosition position);
 	void attack(VehicleLocalPosition& copy);
-	void attack_trigger(Bool trigger);
+	void attack_trigger(std_msgs::msg::Empty);
+
+    const double mean = 0.0;
+    const double stddev = 1.0;
+    std::default_random_engine generator;
+    std::normal_distribution<double> dist;
+
 };
 
 void Attacker::attack(VehicleLocalPosition& copy)
 {
     if (attack_flag)
     {
-        copy.x /= 2;
-        copy.y /= 2;
-        copy.z /= 2;
+        copy.x *= 1;
+        copy.vx *= (1 + dist(generator));
+        /*copy.y = 0;*/
+        /*copy.z = 0;*/
     } else {
         copy.x *= 1;
-        copy.y *= 1;
-        copy.z *= 1;
+        copy.vx *= 1;
+        /*copy.y *= 1;*/
+        /*copy.z *= 1;*/
     }
 }
 
@@ -68,9 +78,9 @@ void Attacker::attack(VehicleLocalPosition& copy)
  * @brief Obtain local position of vehicle and set the velocity 
  * @param position	Position output from the EKF
  */
-void Attacker::attack_trigger(Bool trigger)
+void Attacker::attack_trigger(std_msgs::msg::Empty)
 {
-    attack_flag = trigger.data;
+    attack_flag = !attack_flag;
 }
 
 /**

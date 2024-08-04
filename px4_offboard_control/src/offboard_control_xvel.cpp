@@ -5,9 +5,8 @@
 #include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/detail/empty__struct.hpp>
 #include <std_msgs/msg/empty.hpp>
-#include <std_msgs/msg/float64_multi_array.hpp>
+#include <px4_offboard_control/msg/timestamped_array.hpp>
 #include <stdint.h>
 
 /*#include <chrono>*/
@@ -36,7 +35,7 @@ public:
             this->create_publisher<VehicleCommand>("/fmu/in/vehicle_command", 10);
 
         input_matrix_publisher_ =
-            this->create_publisher<std_msgs::msg::Float64MultiArray>(
+            this->create_publisher<px4_offboard_control::msg::TimestampedArray>(
                 "/input_matrices", 10);
 
         ekf_subscriber_ =
@@ -88,9 +87,9 @@ public:
                 }
 
                 time_counter += 1 / sampling_freq;
-                std_msgs::msg::Float64MultiArray input; // Input vector
+                px4_offboard_control::msg::TimestampedArray input; // Input vector
                 std::vector<double> sensor_vector{static_cast<double>(vx)};
-                input.data = sensor_vector;
+                input.array.data = sensor_vector;
                 input_matrix_publisher_->publish(input);
             }
 
@@ -113,7 +112,7 @@ public:
 private:
     rclcpp::TimerBase::SharedPtr timer_;
 
-    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr
+    rclcpp::Publisher<px4_offboard_control::msg::TimestampedArray>::SharedPtr
     input_matrix_publisher_;
     rclcpp::Publisher<OffboardControlMode>::SharedPtr
     offboard_control_mode_publisher_;
