@@ -28,24 +28,53 @@ class StateEstimator(Node):
         super().__init__("state_estimator", parameter_overrides=[])
 
         self.qos_profile = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5)
+        # Ac = np.matrix(
+        #     [
+        #         [0, 1],  # x
+        #         [0, 0],  # xdot
+        #     ]
+        # )
+        # Bc = np.matrix(
+        #     [
+        #         [1],
+        #         [0],
+        #     ]
+        # )
+        # Cc = np.matrix(
+        #     [
+        #         [1, 0],  # x1
+        #         [0, 1],  # xdot1
+        #         [1, 0],  # x2
+        #         [0, 1],  # xdot2
+        #     ]
+        # )
+        # Dc = np.zeros((Cc.shape[0], Bc.shape[1]))
         Ac = np.matrix(
             [
-                [0, 1],  # x
-                [0, 0],  # xdot
+                [0, 1, 0, 0],  # x
+                [0, 0, 0, 0],  # xdot
+                [0, 0, 1, 0],  # y
+                [0, 0, 0, 0],  # ydot
             ]
         )
         Bc = np.matrix(
             [
-                [1],
-                [0],
+                [1, 0],
+                [0, 0],  # vx
+                [0, 1],  # vy
+                [0, 0],
             ]
         )
         Cc = np.matrix(
             [
-                [1, 0],  # x1
-                [0, 1],  # xdot1
-                [1, 0],  # x2
-                [0, 1],  # xdot2
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],  # x
+                [0, 0, 0, 1],  # xdot
+                [1, 0, 0, 0],  # y
+                [0, 1, 0, 0],  # ydot
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
             ]
         )
         Dc = np.zeros((Cc.shape[0], Bc.shape[1]))
@@ -57,7 +86,7 @@ class StateEstimator(Node):
         )
         self.n: int = self.dtsys_a.shape[0]
 
-        self.s = 1
+        self.s = 2
         self.y_vec = []
         self.u_vec = []
         self.gamma_set = []
@@ -115,6 +144,7 @@ class StateEstimator(Node):
         )
         ssr_solution = SecureStateReconstruct(ss_problem)
         possible_states, corresp_sensor, residuals_list = ssr_solution.solve(np.inf)
+        # possible_states, corresp_sensor, residuals_list = ssr_solution.solve(2.0)
         print("-------------------------------------")
         print(f"self.s: {self.s}")
         print(
@@ -131,13 +161,12 @@ class StateEstimator(Node):
 
         estimated_states = TimestampedArray()
         estimated_states.header = msg.header
-        estimated_states.array.data = list(possible_states.reshape(1,-1)[0])
+        estimated_states.array.data = list(possible_states.reshape(1, -1)[0])
         self.estimated_states_publisher.publish(estimated_states)
         residuals = TimestampedArray()
         residuals.header = msg.header
-        residuals.array.data = list(np.array(residuals_list).reshape(1,-1)[0])
+        residuals.array.data = list(np.array(residuals_list).reshape(1, -1)[0])
         self.residuals_publisher.publish(residuals)
-
 
     def update_sensor_matrix(self, msg: TimestampedArray):
         # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]

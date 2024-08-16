@@ -4,9 +4,9 @@
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
+#include <px4_offboard_control/msg/timestamped_array.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/empty.hpp>
-#include <px4_offboard_control/msg/timestamped_array.hpp>
 #include <stdint.h>
 
 /*#include <chrono>*/
@@ -14,7 +14,6 @@
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
-using namespace px4_msgs::msg;
 
 class OffboardControlXvel : public rclcpp::Node {
 public:
@@ -25,14 +24,16 @@ public:
                                qos_profile);
 
         offboard_control_mode_publisher_ =
-            this->create_publisher<OffboardControlMode>(
+            this->create_publisher<px4_msgs::msg::OffboardControlMode>(
                 "/fmu/in/offboard_control_mode", 10);
 
-        trajectory_setpoint_publisher_ = this->create_publisher<TrajectorySetpoint>(
-            "/fmu/in/trajectory_setpoint", 10);
+        trajectory_setpoint_publisher_ =
+            this->create_publisher<px4_msgs::msg::TrajectorySetpoint>(
+                "/fmu/in/trajectory_setpoint", 10);
 
         vehicle_command_publisher_ =
-            this->create_publisher<VehicleCommand>("/fmu/in/vehicle_command", 10);
+            this->create_publisher<px4_msgs::msg::VehicleCommand>(
+                "/fmu/in/vehicle_command", 10);
 
         input_matrix_publisher_ =
             this->create_publisher<px4_offboard_control::msg::TimestampedArray>(
@@ -51,7 +52,7 @@ public:
 
         sampling_freq = 20; // in Hertz
         offboard_setpoint_counter_ = 0;
-        position = VehicleLocalPosition();
+        position = px4_msgs::msg::VehicleLocalPosition();
 
         start_ssr = false;
 
@@ -60,8 +61,8 @@ public:
 
         auto timer_callback = [this]() -> void {
             if (offboard_setpoint_counter_ == 10) {
-                this->publish_vehicle_command(VehicleCommand::VEHICLE_CMD_DO_SET_MODE,
-                                              1, 6);
+                this->publish_vehicle_command(
+                    px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
                 this->arm();
             }
 
@@ -80,7 +81,7 @@ public:
                 }
             } else {
                 vx = 1.5 * std::sin(time_counter / Ts);
-                vy = 0;
+                vy = 1.5 * std::cos(time_counter / Ts);
                 vz = -5 - position.z;
                 if (abs(vz) > 5) {
                     vz = vz / abs(vz) * 5; // Input in z
@@ -88,7 +89,7 @@ public:
 
                 time_counter += 1 / sampling_freq;
                 px4_offboard_control::msg::TimestampedArray input; // Input vector
-                std::vector<double> sensor_vector{static_cast<double>(vx)};
+                std::vector<double> sensor_vector{static_cast<double>(vx), static_cast<double>(vy)};
                 input.array.data = sensor_vector;
                 input_matrix_publisher_->publish(input);
             }
@@ -114,11 +115,12 @@ private:
 
     rclcpp::Publisher<px4_offboard_control::msg::TimestampedArray>::SharedPtr
     input_matrix_publisher_;
-    rclcpp::Publisher<OffboardControlMode>::SharedPtr
+    rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr
     offboard_control_mode_publisher_;
-    rclcpp::Publisher<TrajectorySetpoint>::SharedPtr
+    rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr
     trajectory_setpoint_publisher_;
-    rclcpp::Publisher<VehicleCommand>::SharedPtr vehicle_command_publisher_;
+    rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr
+    vehicle_command_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr
     ekf_subscriber_;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr ssr_start_subscriber_;
@@ -136,15 +138,15 @@ private:
     void ssr_start_callback_(std_msgs::msg::Empty msg);
     void publish_vehicle_command(uint16_t command, float param1 = 0.0,
                                  float param2 = 0.0);
-    void state_merger(VehicleLocalPosition &output);
+    void state_merger(px4_msgs::msg::VehicleLocalPosition &output);
 };
 
 /**
  * @brief Send a command to Arm the vehicle
  */
 void OffboardControlXvel::arm() {
-    publish_vehicle_command(VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-                            1.0);
+    publish_vehicle_command(
+        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0);
 
     RCLCPP_INFO(this->get_logger(), "Arm command send");
 }
@@ -153,8 +155,8 @@ void OffboardControlXvel::arm() {
  * @brief Send a command to Disarm the vehicle
  */
 void OffboardControlXvel::disarm() {
-    publish_vehicle_command(VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-                            0.0);
+    publish_vehicle_command(
+        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0);
 
     RCLCPP_INFO(this->get_logger(), "Disarm command send");
 }
@@ -164,7 +166,7 @@ void OffboardControlXvel::disarm() {
  *        For this example, only position and altitude controls are active.
  */
 void OffboardControlXvel::publish_offboard_control_mode() {
-    OffboardControlMode msg{};
+    px4_msgs::msg::OffboardControlMode msg{};
     msg.position = false;
     msg.velocity = true;
     msg.acceleration = false;
@@ -180,7 +182,7 @@ void OffboardControlXvel::publish_offboard_control_mode() {
  *        vehicle hover at 5 meters with a yaw angle of 180 degrees.
  */
 void OffboardControlXvel::publish_trajectory_setpoint() {
-    TrajectorySetpoint msg{};
+    px4_msgs::msg::TrajectorySetpoint msg{};
     msg.position = {NAN, NAN, NAN};
     msg.velocity = {vx, vy, vz};
     msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
@@ -196,7 +198,7 @@ void OffboardControlXvel::publish_trajectory_setpoint() {
  */
 void OffboardControlXvel::publish_vehicle_command(uint16_t command,
                                                   float param1, float param2) {
-    VehicleCommand msg{};
+    px4_msgs::msg::VehicleCommand msg{};
     msg.param1 = param1;
     msg.param2 = param2;
     msg.command = command;
