@@ -5,11 +5,7 @@ from rclpy.qos import HistoryPolicy, QoSProfile
 from std_msgs.msg import Empty
 from px4_offboard_control.msg import TimestampedArray
 
-from px4_ssr.drone_system import (
-    TS,
-    SecureStateReconstruct,
-    SSProblem,
-)
+from px4_ssr.drone_system import TS, SecureStateReconstruct, SSProblem, SystemModel
 
 
 class XProb:
@@ -28,61 +24,13 @@ class StateEstimator(Node):
         super().__init__("state_estimator", parameter_overrides=[])
 
         self.qos_profile = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5)
-        # Ac = np.matrix(
-        #     [
-        #         [0, 1],  # x
-        #         [0, 0],  # xdot
-        #     ]
-        # )
-        # Bc = np.matrix(
-        #     [
-        #         [1],
-        #         [0],
-        #     ]
-        # )
-        # Cc = np.matrix(
-        #     [
-        #         [1, 0],  # x1
-        #         [0, 1],  # xdot1
-        #         [1, 0],  # x2
-        #         [0, 1],  # xdot2
-        #     ]
-        # )
-        # Dc = np.zeros((Cc.shape[0], Bc.shape[1]))
-        Ac = np.matrix(
-            [
-                [0, 1, 0, 0],  # x
-                [0, 0, 0, 0],  # xdot
-                [0, 0, 1, 0],  # y
-                [0, 0, 0, 0],  # ydot
-            ]
-        )
-        Bc = np.matrix(
-            [
-                [1, 0],
-                [0, 0],  # vx
-                [0, 1],  # vy
-                [0, 0],
-            ]
-        )
-        Cc = np.matrix(
-            [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],  # x
-                [0, 0, 0, 1],  # xdot
-                [1, 0, 0, 0],  # y
-                [0, 1, 0, 0],  # ydot
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
-            ]
-        )
-        Dc = np.zeros((Cc.shape[0], Bc.shape[1]))
+        system_model = SystemModel()
 
-        # self.drone = DroneSystem()
         # self.s = self.drone.p - 1
         self.dtsys_a, self.dtsys_b, self.dtsys_c, self.dtsys_d = (
-            SSProblem.convert_ct_to_dt(Ac, Bc, Cc, Dc, TS)
+            SSProblem.convert_ct_to_dt(
+                system_model.Ac, system_model.Bc, system_model.Cc, system_model.Dc, TS
+            )
         )
         self.n: int = self.dtsys_a.shape[0]
 

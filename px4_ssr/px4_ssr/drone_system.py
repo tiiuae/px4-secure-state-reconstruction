@@ -1,8 +1,10 @@
-import numpy as np
-import scipy as sc
-import control as ct
 import itertools
 from typing import List
+
+import control as ct
+import numpy as np
+import scipy.linalg as linalg
+from cvxopt import matrix, solvers
 
 EPS: float = 1e-6
 TS: float = 0.05
@@ -36,134 +38,37 @@ def nchoosek(v: List[int], k: int) -> List[List[int]]:
     """
     return [list(comb) for comb in itertools.combinations(v, k)]
 
-
-class DroneSystem:
-    def __init__(self, A=None, B=None, C=None, D=None, ts=0.05):
-        self.ts = ts
-
-        self._define_state(A, B, C, D)
-        self.n = np.size(self.Ad, 0)
-        self.m = np.size(self.Bd, 1)
-        self.p = np.size(self.Cd, 0)
-
-        self._define_barriers()
-        self._define_auxiliary_matrices()
-
-    def _define_state(self, A, B, C, D):
-        if A is None:
-            self.Ac = np.matrix(
-                [
-                    # [0, 0, 1, 0],
-                    # [0, 0, 0, 1],
-                    # [0, 0, 0, 0],
-                    # [0, 0, 0, 0]
-                    [0, 1],  # x xdot
-                    [0, 0],
-                ]
-            )
-        else:
-            self.Ac = A
-
-        if B is None:
-            self.Bc = np.matrix(
-                [
-                    # [0, 0],
-                    # [0, 0],
-                    # [1, 0],
-                    # [0, 1]
-                    [0],
-                    [1],
-                ]
-            )
-        else:
-            self.Bc = B
-
-        if C is None:
-            self.Cc = np.matrix(
-                [
-                    # [1, 0, 0, 0],
-                    # [1, 0, 0, 0],
-                    # [0, 1, 0, 0],
-                    # [0, 1, 0, 0],
-                    # [0, 0, 1, 0],
-                    # [0, 0, 1, 0],
-                    # [0, 0, 0, 1],
-                    # [0, 0, 0, 1],
-                    [1, 0],  # x1 xdot1 x2 xdot2
-                    [0, 1],
-                    [1, 0],
-                    [0, 1],
-                ]
-            )
-        else:
-            self.Cc = C
-
-        if D is None:
-            self.Dc = np.matrix(
-                [
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0],
-                    # [0, 0]
-                    [0],
-                    [0],
-                    [0],
-                    [0],
-                ]
-            )
-        else:
-            self.Dc = D
-
-        assert np.size(self.Ac, 0) == np.size(self.Cc, 1)
-        assert np.size(self.Ac, 0) == np.size(self.Bc, 0)
-        assert np.size(self.Ac, 1) == np.size(self.Cc, 1)
-        assert np.size(self.Bc, 1) == np.size(self.Dc, 1)
-        assert np.size(self.Cc, 0) == np.size(self.Dc, 0)
-
-        self.system_c = ct.StateSpace(self.Ac, self.Bc, self.Cc, self.Dc)
-        self.system_d = ct.c2d(self.system_c, self.ts, "zoh")
-
-        self.Ad, self.Bd, self.Cd, self.Dd = (
-            self.system_d.A,
-            self.system_d.B,
-            self.system_d.C,
-            self.system_d.D,
+class SystemModel:
+    def __init__(self):
+        self.Ac = np.matrix(
+            [
+                [0, 1, 0, 0],  # x
+                [0, 0, 0, 0],  # xdot
+                [0, 0, 1, 0],  # y
+                [0, 0, 0, 0],  # ydot
+            ]
         )
-
-    def _define_barriers(self):
-        # self.H = np.matrix([[ 1, 0, 0, 0],
-        #                     [-1, 0, 0, 0],
-        #                     [ 0, 1, 0, 0],
-        #                     [ 0,-1, 0, 0],
-        #                     [ 0, 0, 1, 0],
-        #                     [ 0, 0,-1, 0],
-        #                     [ 0, 0, 0, 1],
-        #                     [ 0, 0, 0,-1]])
-        # self.q = 4 * np.ones((8,1));
-        self.H = np.matrix([[1, 0], [-1, 0], [0, 1], [0, -1]])
-        self.q = 4 * np.ones((4, 1))
-
-    def _define_auxiliary_matrices(self):
-        self.O_cell = np.zeros((self.p, self.n, self.n))
-        self.F_cell = np.zeros((self.p, self.n, self.n * self.m))
-        for i in range(self.p):
-            self.O_cell[i] = ct.obsv(self.Ad, self.Cd[i])
-            Fi = np.zeros((self.n, self.n * self.m))
-
-            for j in range(1, self.n):
-                for k in range(j):
-                    Fi[j, self.m * k : self.m * (k + 1)] = (
-                        self.Cd[i]
-                        @ np.linalg.matrix_power(self.Ad, j - k - 1)
-                        @ self.Bd
-                    )
-
-            self.F_cell[i] = Fi
-
+        self.Bc = np.matrix(
+            [
+                [1, 0],
+                [0, 0],  # vx
+                [0, 1],  # vy
+                [0, 0],
+            ]
+        )
+        self.Cc = np.matrix(
+            [
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, 0],  # x
+                [0, 0, 0, 1],  # xdot
+                [1, 0, 0, 0],  # y
+                [0, 1, 0, 0],  # ydot
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+        self.Dc = np.zeros((self.Cc.shape[0], self.Bc.shape[1]))
 
 class SSProblem:
     """
@@ -271,7 +176,7 @@ class SSProblem:
         """
         From continuous time system (Ac, Bc, Cc, Dc) to discrete-time system (A,B,C,D) with ZOH discretization scheme
         """
-        continuous_sys: ct.StateSpace = ct.ss(Ac, Bc, Cc, Dc)
+        continuous_sys = ct.ss(Ac, Bc, Cc, Dc)
         discrete_sys = continuous_sys.sample(ts, method="zoh")
         return (
             discrete_sys.A,
@@ -316,9 +221,9 @@ class SecureStateReconstruct:
         A = ss_problem.A
         for i in range(ss_problem.p):
             Ci = ss_problem.C[i : i + 1, :]
-            obser_i = Ci @ sc.linalg.fractional_matrix_power(A, 0)
+            obser_i = Ci @ linalg.fractional_matrix_power(A, 0)
             for t in range(1, ss_problem.io_length):
-                new_row = Ci @ sc.linalg.fractional_matrix_power(A, t)
+                new_row = Ci @ linalg.fractional_matrix_power(A, t)
                 obser_i = np.vstack((obser_i, new_row))
             obser_matrix_array[:, :, i : i + 1] = obser_i.reshape(
                 ss_problem.io_length, ss_problem.n, 1
@@ -363,16 +268,8 @@ class SecureStateReconstruct:
         for t in range(1, io_length):
             fi[t : t + 1, :] = right_shift_row_array(fi[t - 1 : t, :], m)
             # here for t-th row, t = 1,...,io_length -1, add the left most element Ci A^t B.
-            fi[t : t + 1, 0:m] = Ci @ sc.linalg.fractional_matrix_power(A, t - 1) @ B
+            fi[t : t + 1, 0:m] = Ci @ linalg.fractional_matrix_power(A, t - 1) @ B
         return fi
-
-    # def construct_y_his_vec(self,comb):
-    #     measure_vec_list = []
-    #     for i in comb:
-    #         measure_i = self.y_his[:,i:i+1]
-    #         measure_vec_list.append(measure_i)
-    #     measure_vec = np.vstack(measure_vec_list)
-    #     return measure_vec
 
     def solve_initial_state(self, error_bound: float = 1.0):
         """
@@ -391,12 +288,12 @@ class SecureStateReconstruct:
             # print(f'corresponding measurement is \n {measure_vec}')
 
             # print(f'Observation matrix shape {obser_matrix.shape}, measure_vec shape {measure_vec.shape}')
-            state, residuals, rank, _ = sc.linalg.lstsq(obser_matrix, measure_vec)
+            state, residuals, rank, _ = linalg.lstsq(obser_matrix, measure_vec)
 
             if len(residuals) < 1:
                 # print(f'combinations: {comb}')
                 residuals = (
-                    sc.linalg.norm(obser_matrix @ state - measure_vec, ord=2) ** 2
+                    linalg.norm(obser_matrix @ state - measure_vec, ord=2) ** 2
                 )
             else:
                 residuals = residuals.item()
@@ -521,3 +418,219 @@ class SecureStateReconstruct:
 
         # Convert the list to a tuple and use it to slice the array
         return array[tuple(index)]
+
+class LinearInequalityConstr:
+    """
+    This class defines linear inequality constraints and methods including compare, visualize
+
+    linear inequality constraints: a_mat x + b_vec >= 0 (or, -a_mat x >= b_vec)
+    a: (M,N) array
+    b: (M,1) array
+    """
+
+    def __init__(self, a: np.ndarray, b: np.ndarray) -> None:
+        b = b.reshape(-1, 1)
+        assert a.shape[0] == b.shape[0]
+        self.a_mat = a
+        self.b_vec = b
+
+    def compare(self, linear_ineq_constr):
+        pass
+
+    def visualize(self, dim=(0, 1)):
+        pass
+
+    def combine(self, linear_ineq_constr):
+        a_mat = np.vstack((self.a_mat, linear_ineq_constr.a_mat))
+        b_vec = np.vstack((self.b_vec, linear_ineq_constr.b_vec))
+        return LinearInequalityConstr(a_mat, b_vec)
+
+    def is_satisfy(self, u):
+        u = u.reshape(-1, 1)
+        assert u.shape[0] == self.a_mat.shape[1]
+
+        return all(self.a_mat @ u + self.b_vec + 1e-6 >= 0)
+
+
+class SafeProblem:
+    """
+    This class defines data for safe problem
+    """
+
+    def __init__(self, ss_problem: SSProblem, h, q, gamma) -> None:
+        assert gamma >= 0
+        assert gamma <= 1
+
+        assert h.shape[0] == q.shape[0]
+        assert h.shape[1] == ss_problem.A.shape[1]
+        assert q.shape[1] == 1
+
+        self.problem = ss_problem
+
+        self.h = h
+        self.q = q
+        self.gamma = gamma
+
+        # according to (7) of the note "Safety of linear systems under sensor attacks without state estimation
+        self.k = (1 - gamma) * h @ np.linalg.matrix_power(
+            self.problem.A, self.problem.io_length
+        ) - h @ np.linalg.matrix_power(self.problem.A, self.problem.io_length + 1)
+
+    def cal_cbf_condition_state(self, state) -> LinearInequalityConstr:
+        state = state.reshape(-1, 1)
+        a_mat = self.h @ self.problem.B
+        b_vec = (
+            self.h @ self.problem.A @ state
+            + self.q
+            - (1 - self.gamma) * (self.h @ state + self.q)
+        )
+        return LinearInequalityConstr(a_mat, b_vec)
+
+    def merge_multiple_LIC(self, constr_list) -> LinearInequalityConstr:
+        lic_full = constr_list[0]
+        if len(constr_list) == 1:
+            return lic_full
+
+        for lic in constr_list[1:]:
+            lic_full = LinearInequalityConstr.combine(lic_full, lic)
+        return lic_full
+
+    def cal_cbf_condition(self, possible_states) -> LinearInequalityConstr:
+        """
+        This method calculates CBF conditions over a set of states
+        """
+        cbf_conditions = []
+        for state in possible_states:
+            cbf_condition = self.cal_cbf_condition_state(state)
+            cbf_conditions.append(cbf_condition)
+
+        total_cbf_condition = self.merge_multiple_LIC(cbf_conditions)
+        return total_cbf_condition
+
+    def cal_Q_ut(self):
+        """
+        construct Q(u(t)) according to (7) of the note "Safety of linear systems under sensor attacks without state estimation
+
+        """
+
+        H = self.h
+        q = self.q
+        gamma = self.gamma
+
+        A = self.problem.A
+        B = self.problem.B
+        io_length = self.problem.io_length
+        n = self.problem.n
+        m = self.problem.m
+
+        u_seq = self.problem.u_seq
+
+        left_mat = H @ ((1 - gamma) * np.identity(n) - A)
+        right_vec = np.zeros((n, 1))
+        for k in range(io_length - 1):
+            ut = u_seq[k, :]
+            ut = ut.reshape(-1, 1)
+            temp = (
+                linalg.fractional_matrix_power(A, io_length - 2 - k) @ B @ ut
+            )  # note in the paper, io_length = t + 1
+            right_vec = right_vec + temp
+
+        return left_mat @ right_vec - gamma * q
+
+    def cal_safe_input_constr_woSSR(
+        self, initial_states_subssr
+    ) -> LinearInequalityConstr:
+        """
+        This method implements our computationally efficient CBF conditions
+        initial_states_subssr is a list of possible_initial_states, each entry correspnds to one subspace
+        possible_initial_states = initial_states_subssr[j] is a n*x 2d array, each column corresponds to one state
+
+        """
+        Q_ut = self.cal_Q_ut()
+        kv_maxsum = np.zeros(np.shape(self.q))
+        count_subspace = len(initial_states_subssr)
+        for j in range(count_subspace):
+            possible_initial_states = initial_states_subssr[j]
+            kv = self.k @ possible_initial_states
+            kv_max = kv.max(axis=1)
+            kv_max = kv_max.reshape(-1, 1)
+            kv_maxsum = kv_maxsum + kv_max
+        # a_mat x + b_vec \geq 0
+        a_mat = self.h @ self.problem.B
+        b_vec = -kv_maxsum - Q_ut
+
+        # print(f'a_mat: {a_mat.shape}')
+        # print(f'b_vec: {b_vec.shape}')
+        # print(f'kv_maxsum: {kv_maxsum.shape}')
+        # print(f'Q_ut shape: {Q_ut}')
+        return LinearInequalityConstr(a_mat, b_vec)
+
+    def cal_safe_qp(self, u_nom, lic: LinearInequalityConstr):
+        """
+        sol_flag: -1 -- qp solver fails, 0 -- qp status "unknown", 1 -- qp status 'optimal'
+        """
+        flag = 0
+        # Define QP parameters for qp solver (CVXOPT):
+        # min 0.5 xT P x+ qT x s.t. Gx <= h
+        qp_P = matrix(np.identity(u_nom.shape[0]))
+        qp_q = matrix(-u_nom, (u_nom.shape[0], 1), "d")  #  qp_q is a m*1 matrix
+        qp_G = matrix(-lic.a_mat)
+        qp_h = matrix(lic.b_vec, (lic.b_vec.shape[0], 1), "d")  # qp_h is a x*1 matrix
+
+        solvers.options["show_progress"] = False  # mute optimization output
+        solvers.options["maxiters"] = 500  # increase max iteration number
+        solvers.options["abstol"] = 1e-4
+        solvers.options["reltol"] = 1e-5
+        try:
+            solv_sol = solvers.qp(qp_P, qp_q, qp_G, qp_h)
+            if solv_sol["status"] == "unknown":
+                print(
+                    "warning: safe control is approximately computed. Use u_nom instead."
+                )
+                u = u_nom.flatten()
+            else:
+                flag = 1
+                u = np.array(
+                    solv_sol["x"]
+                ).flatten()  # extract decision variables of optimization problem
+        except Exception as _:
+            # print('cvxopt solver failed:')
+            # print(f'qp_P: {qp_P}')
+            # print(f'qp_q: {qp_q}')
+            # print(f'qp_G: {qp_G}')
+            # print(f'qp_h: {qp_h}')
+
+            # solvers.options['show_progress'] = True
+            # solv_sol = solvers.qp(qp_P,qp_q,qp_G,qp_h)
+
+            # raise TypeError('no control input found')
+            print("warning: safe control fails. Use u_nom instead.")
+            flag = -1
+            u = u_nom.flatten()
+
+        return u, flag
+
+    def cal_safe_control(self, u_nom, possible_states):
+        lic = self.cal_cbf_condition(possible_states)
+        u, flag = self.cal_safe_qp(u_nom, lic)
+        return u, lic, flag
+
+    def solve_safe_control_by_brute_force(self, possible_states, u_nom):
+        # solve ssr by brute-force
+        possible_states = possible_states.transpose() # now possible_states[0] is one possible state
+        possible_states = self.remove_duplicate_states(possible_states)
+        u_safe1,lic1,flag1 = self.cal_safe_control(u_nom,possible_states)
+
+    def remove_duplicate_states(self, possible_states):
+        state_lst = [possible_states[0]]
+        for state in possible_states[1:]:
+            if not any(self.is_same_state(state,st) for st in state_lst):
+                state_lst.append(state)
+        return state_lst
+
+    def is_same_state(self, st1:np.ndarray, st2:np.ndarray):
+        error = st1.flatten() - st2.flatten()
+        # print(f'error norm: {linalg.norm(error)}')
+        if linalg.norm(error)<1e-6:
+            return True
+        return False
