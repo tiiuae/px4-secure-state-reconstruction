@@ -77,7 +77,8 @@ class StateEstimator(Node):
         # if len(self.y_vec) < self.drone.n:
         if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
             return
-        # Since u_vec should contain the last n-1 inputs and the most current input is zeros/not decided yet.
+        # Since u_vec should contain the last n-1 inputs and the most current
+        # input is zeros/not decided yet.
         u_vec = self.u_vec[1:]
         u_vec.append([0 for _ in range(self.dtsys_b.shape[1])])
 

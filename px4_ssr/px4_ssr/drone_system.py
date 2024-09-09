@@ -457,15 +457,20 @@ class SafeProblem:
     This class defines data for safe problem
     """
 
-    def __init__(self, ss_problem: SSProblem, h, q, gamma) -> None:
+    def __init__(self, A, B, h, q, gamma) -> None:
         assert gamma >= 0
         assert gamma <= 1
 
-        assert h.shape[0] == q.shape[0]
-        assert h.shape[1] == ss_problem.A.shape[1]
-        assert q.shape[1] == 1
+        self.A = A
+        self.B = B
+        self.u_seq = np.array([])
+        self.n = A.shape[0]
+        self.m = B.shape[1]
+        self.io_length = self.n
 
-        self.problem = ss_problem
+        assert h.shape[0] == q.shape[0]
+        assert h.shape[1] == self.A.shape[1]
+        assert q.shape[1] == 1
 
         self.h = h
         self.q = q
@@ -473,14 +478,14 @@ class SafeProblem:
 
         # according to (7) of the note "Safety of linear systems under sensor attacks without state estimation
         self.k = (1 - gamma) * h @ np.linalg.matrix_power(
-            self.problem.A, self.problem.io_length
-        ) - h @ np.linalg.matrix_power(self.problem.A, self.problem.io_length + 1)
+            self.A, self.io_length
+        ) - h @ np.linalg.matrix_power(self.A, self.io_length + 1)
 
     def cal_cbf_condition_state(self, state) -> LinearInequalityConstr:
         state = state.reshape(-1, 1)
-        a_mat = self.h @ self.problem.B
+        a_mat = self.h @ self.B
         b_vec = (
-            self.h @ self.problem.A @ state
+            self.h @ self.A @ state
             + self.q
             - (1 - self.gamma) * (self.h @ state + self.q)
         )
@@ -517,13 +522,13 @@ class SafeProblem:
         q = self.q
         gamma = self.gamma
 
-        A = self.problem.A
-        B = self.problem.B
-        io_length = self.problem.io_length
-        n = self.problem.n
-        m = self.problem.m
+        A = self.A
+        B = self.B
+        io_length = self.io_length
+        n = self.n
+        m = self.m
 
-        u_seq = self.problem.u_seq
+        u_seq = self.u_seq
 
         left_mat = H @ ((1 - gamma) * np.identity(n) - A)
         right_vec = np.zeros((n, 1))
@@ -556,7 +561,7 @@ class SafeProblem:
             kv_max = kv_max.reshape(-1, 1)
             kv_maxsum = kv_maxsum + kv_max
         # a_mat x + b_vec \geq 0
-        a_mat = self.h @ self.problem.B
+        a_mat = self.h @ self.B
         b_vec = -kv_maxsum - Q_ut
 
         # print(f'a_mat: {a_mat.shape}')
@@ -615,11 +620,12 @@ class SafeProblem:
         u, flag = self.cal_safe_qp(u_nom, lic)
         return u, lic, flag
 
-    def solve_safe_control_by_brute_force(self, possible_states, u_nom):
+    def solve_safe_control_by_brute_force(self, u_nom, possible_states):
         # solve ssr by brute-force
         possible_states = possible_states.transpose() # now possible_states[0] is one possible state
         possible_states = self.remove_duplicate_states(possible_states)
         u_safe1,lic1,flag1 = self.cal_safe_control(u_nom,possible_states)
+        return u_safe1, lic1, flag1
 
     def remove_duplicate_states(self, possible_states):
         state_lst = [possible_states[0]]
