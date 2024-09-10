@@ -96,9 +96,13 @@ class SafeController(Node):
         # i.e. the safety_filter is running in "open-loop"
         # TODO: Differentiate between u_nom and u_safe
         ####### The SSR takes in u_safe not u_nom
-        u_safe, lic, flag = self.safe_problem.cal_safe_control(self.u_vec[-1], self.x_est)
+        u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est.T)
 
-        print(u_safe, flag)
+        print("---")
+        print("u_safe: ", u_safe)
+        print("u_nom: ", self.u_vec[-1])
+        print("flag: ", flag)
+        print("---")
 
     def update_sensor_matrix(self, msg: TimestampedArray):
         # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]

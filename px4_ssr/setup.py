@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'state_estimator = px4_ssr.state_estimator:main',
+            'safe_controller = px4_ssr.safe_controller:main',
         ],
     },
 )
