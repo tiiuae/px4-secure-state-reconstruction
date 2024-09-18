@@ -26,7 +26,8 @@
 
 ## Containerised Deployement
 
-For this, we will be defining a few aliases. So do not forget to clean your `.bashrc` file later on if you want to clean your aliases.
+For this, we will be defining a few aliases. So do not forget to clean your
+`.bashrc` file later on if you want to clean your aliases.
 
 ### Simulation Environment
 
@@ -81,11 +82,14 @@ To make our life easier, we can make the `docker run` command into an alias:
 echo 'alias px4_sim="docker run -it --privileged --rm -v ${FIRMWARE_DIR}:/Firmware:rw -v /tmp/.X11-unix:/tmp/.X11-unix:ro -e DISPLAY=${DISPLAY} -e LOCAL_USER_ID='$(id -u)' -w /Firmware --network=host --name=px4_sim px4io/px4-dev-simulation-jammy /bin/bash"' >> ~/.bashrc
 ```
 
-Now, you can directly enter the simulation container environment by running `px4_sim`.
+Now, you can directly enter the simulation container environment by running
+`px4_sim`.
 
 ### MicroXRCE-DDS Agent
 
-The DDS agent is necessary to transfer the uORB topics from within the autopilot into ROS 2 topics. This can also be deployed in container environment:
+The DDS agent is necessary to transfer the uORB topics from within the
+autopilot into ROS 2 topics. This can also be deployed in container
+environment:
 
 ```bash
 git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
@@ -93,7 +97,8 @@ cd Micro-XRCE-DDS-Agent
 docker build -t=microxrce_agent .
 ```
 
-The build should take some time, but once it is done, we will have the agent container available. To launch this:
+The build should take some time, but once it is done, we will have the agent
+container available. To launch this:
 
 ```bash
 docker run -it --rm --network=host microxrce_agent udp4 --port 8888
@@ -101,7 +106,8 @@ docker run -it --rm --network=host microxrce_agent udp4 --port 8888
 
 ### ROS 2 Development Environment
 
-For ease of use, just copy paste the following bash command as is. There aren't any superuser commands so your system should be safe.
+For ease of use, just copy paste the following bash command as is. There aren't
+any superuser commands so your system should be safe.
 
 ```bash
 # First clone the repository
@@ -123,9 +129,13 @@ docker cp temp_container:/ros_workspace/build build
 docker kill temp_container
 ```
 
-To make it easier for us to develop the solution while testing it, we will mount the ROS 2 workspace as a volume into the container. This way, you can develop locally, but build, deploy and test into the container environment where your ROS packages are available.
+To make it easier for us to develop the solution while testing it, we will
+mount the ROS 2 workspace as a volume into the container. This way, you can
+develop locally, but build, deploy and test into the container environment
+where your ROS packages are available.
 
-Since we will be using the container environment regularly, it is HIGHLY RECOMMENDED to write this alias:
+Since we will be using the container environment regularly, it is HIGHLY
+RECOMMENDED to write this alias:
 
 ```bash
 # Copy paste as it is
@@ -194,13 +204,14 @@ docker run -it --rm --network=host microxrce_agent udp4 --port 8888
 ssr_ros_ws ros2 launch px4_offboard_control module_launch.py
 ```
 
-If successful, then the drone should be hovering in the Gazebo simulation environment.
+If successful, then the drone should be hovering in the Gazebo simulation
+environment.
 
 ## Launch Secure State Reconstruction Node
 
 ```bash
 # in Terminal 4
-ssr_ros_ws ros2 run px4_ssr state_estimator
+ssr_ros_ws ros2 launch px4_ssr ssr_launch.py # This will launch the estimator and filter
 ```
 
 ## Initiate the Estimator
@@ -212,10 +223,13 @@ ssr_ros_ws ros2 topic pub -1 /start_ssr std_msgs/msg/Empty "{}"
 
 # Updating (in Containers)
 
-As long as the `build`, `install` and `log` directories haven't been tampered with, you can simply `git pull` or `git push` normally.
+As long as the `build`, `install` and `log` directories haven't been
+tampered with, you can simply `git pull` or `git push` normally.
 
 > [!warning]
-> If something breaks and you are getting irreparable errors, then make sure to `commit` and `push` your changes to the repository. Delete the entire `~/ros_workspace` and re-run:
+> If something breaks and you are getting irreparable errors, then make sure
+> to `commit` and `push` your changes to the repository. Delete the entire
+> `~/ros_workspace` and re-run:
 >
 > ```bash
 > # First clone the repository
