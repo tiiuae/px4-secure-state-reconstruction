@@ -10,9 +10,12 @@
   - [Launch Simulation](#launch-simulation)
   - [Launch DDS Agent](#launch-dds-agent)
   - [Launch Offboard Control Modules](#launch-offboard-control-modules)
-  - [Launch Secure State Reconstruction Node](#launch-secure-state-reconstruction-node)
+  - [Launch Secure State Reconstruction Nodes](#launch-secure-state-reconstruction-nodes)
   - [Initiate the Estimator](#initiate-the-estimator)
 - [Updating (in Containers)](#updating-in-containers)
+- [Plan for Implementation](#plan-for-implementation)
+  - [Simulation](#simulation)
+  - [Hardware](#hardware)
 <!--toc:end-->
 
 # Installation
@@ -207,7 +210,7 @@ ssr_ros_ws ros2 launch px4_offboard_control module_launch.py
 If successful, then the drone should be hovering in the Gazebo simulation
 environment.
 
-## Launch Secure State Reconstruction Node
+## Launch Secure State Reconstruction Nodes
 
 ```bash
 # in Terminal 4
@@ -250,3 +253,59 @@ tampered with, you can simply `git pull` or `git push` normally.
 > docker cp temp_container:/ros_workspace/build build
 > docker kill temp_container
 > ```
+
+# Plan for Implementation
+
+## Simulation
+
+
+```mermaid
+graph TB
+    subgraph "SITL Instance"
+        Gazebo_Simulation[Gazebo Simulation]
+        PX4_Firmware_SITL[PX4 Firmware SITL]
+
+        Gazebo_Simulation --> |Sensor Outputs| PX4_Firmware_SITL
+        PX4_Firmware_SITL-->|Motor Inputs| Gazebo_Simulation
+    end
+
+    Attacker[Attacker]
+    Sensor_Aggregator[Sensor Aggregator]
+    Nominal_Controller[Nominal Controller]
+    Safety_Filter[Safety Filter]
+    Secure_State_Reconstructor[Secure State Reconstructor]
+
+    PX4_Firmware_SITL --> |EKF| Attacker
+    PX4_Firmware_SITL --> |EKF| Sensor_Aggregator
+    Attacker --> |Tampered EKF| Sensor_Aggregator
+    Sensor_Aggregator --> |Sensors Output| Nominal_Controller
+    Nominal_Controller --> |Nominal Control Inputs| Safety_Filter
+    Sensor_Aggregator --> |Sensors Output| Secure_State_Reconstructor
+    
+    Secure_State_Reconstructor --> |Reconstructed States| Safety_Filter
+    Safety_Filter --> |Safe Control Inputs| PX4_Firmware_SITL
+```
+
+## Hardware
+
+```mermaid
+flowchart BT
+subgraph "Drone"
+    Pixhawk_1[Pixhawk FC 1]
+    Pixhawk_2[Pixhawk FC 2]
+    Pixhawk_2 -->|EKF| Attacker
+    Pixhawk_1 -->|EKF| Sensor_Aggregator
+    Safety_Filter -->|Safe Control Inputs| Pixhawk_1
+    subgraph Mission_Computer[Mission Computer]
+        Attacker[Attacker]
+        Sensor_Aggregator[Sensor Aggregator] 
+        Nominal_Controller[Nominal Controller]
+        Safety_Filter[Safety Filter]
+        Attacker -->|Tampered EKF| Sensor_Aggregator
+        Sensor_Aggregator --> |Sensors Output| Secure_State_Reconstructor[Secure State Reconstructor]
+        Sensor_Aggregator -->|Sensors Output| Nominal_Controller
+        Secure_State_Reconstructor -->|Reconstructed States| Safety_Filter
+        Nominal_Controller-->|Nominal Control Inputs| Safety_Filter
+    end  
+end
+```
