@@ -114,7 +114,7 @@ any superuser commands so your system should be safe.
 
 ```bash
 # First clone the repository
-mdkir ~/ros_workspace && cd ~/ros_workspace
+mkdir ~/ros_workspace && cd ~/ros_workspace
 git clone --recursive https://github.com/juniorsundar-tii/px4-secure-state-reconstruction.git src
 
 # Build the Docker image
@@ -129,7 +129,7 @@ rm -rf install build log
 docker cp temp_container:/ros_workspace/install install
 docker cp temp_container:/ros_workspace/log log
 docker cp temp_container:/ros_workspace/build build
-docker kill temp_container
+docker rm temp_container
 ```
 
 To make it easier for us to develop the solution while testing it, we will
@@ -236,7 +236,7 @@ tampered with, you can simply `git pull` or `git push` normally.
 >
 > ```bash
 > # First clone the repository
-> mdkir ~/ros_workspace && cd ~/ros_workspace
+> mkdir ~/ros_workspace && cd ~/ros_workspace
 > git clone --recursive https://github.com/juniorsundar-tii/px4-secure-state-reconstruction.git src
 > 
 > # Build the Docker image
@@ -251,7 +251,7 @@ tampered with, you can simply `git pull` or `git push` normally.
 > docker cp temp_container:/ros_workspace/install install
 > docker cp temp_container:/ros_workspace/log log
 > docker cp temp_container:/ros_workspace/build build
-> docker kill temp_container
+> docker rm temp_container
 > ```
 
 # Plan for Implementation

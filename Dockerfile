@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
         libgz-transport13-dev \
         && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install setuptools==58.2.0 numpy==1.21.5 control
+RUN python3 -m pip install setuptools==58.2.0 numpy==1.21.5 control cvxopt
 
 RUN mkdir /ros_workspace
 
