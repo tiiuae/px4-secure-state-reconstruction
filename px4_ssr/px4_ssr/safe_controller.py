@@ -111,7 +111,7 @@ class SafeController(Node):
         print("---")
         u_safe_out = TimestampedArray()
         u_safe_out.header = msg.header
-        u_safe_out.array = list(u_safe)
+        u_safe_out.array.data = list(u_safe)
 
         self.safe_controls_publisher.publish(u_safe_out)
 
