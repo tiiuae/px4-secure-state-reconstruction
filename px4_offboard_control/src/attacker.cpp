@@ -46,7 +46,7 @@ private:
     void attack_trigger(std_msgs::msg::Empty);
 
     const double mean = 0.0;
-    const double stddev = 1.0;
+    const double stddev = 4.0;
     std::default_random_engine generator;
     std::normal_distribution<double> dist;
 };
@@ -54,18 +54,14 @@ private:
 void Attacker::attack(VehicleLocalPosition &copy) {
     if (attack_flag) {
         copy.x *= 1;
-        copy.vx *= -1;
-        copy.y *= 1;
-        copy.vy *= (1 + dist(generator));
-        /*copy.y = 0;*/
-        /*copy.z = 0;*/
+        copy.vx *= 1;
+        copy.y *= (1 + dist(generator));
+        copy.vy *= 1;
     } else {
         copy.x *= 1;
         copy.vx *= 1;
         copy.y *= 1;
         copy.vy *= 1;
-        /*copy.y *= 1;*/
-        /*copy.z *= 1;*/
     }
 }
 

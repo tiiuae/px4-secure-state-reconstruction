@@ -1,11 +1,17 @@
 import numpy as np
 import rclpy
+from px4_offboard_control.msg import TimestampedArray
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile
 from std_msgs.msg import Empty
-from px4_offboard_control.msg import TimestampedArray
 
-from px4_ssr.drone_system import TS, SafeProblem, SecureStateReconstruct, SSProblem, SystemModel
+from px4_ssr.drone_system import (
+    TS,
+    SafeProblem,
+    SecureStateReconstruct,
+    SSProblem,
+    SystemModel,
+)
 
 
 class XProb:
@@ -103,6 +109,11 @@ class SafeController(Node):
         print("u_nom: ", self.u_vec[-1])
         print("flag: ", flag)
         print("---")
+        u_safe_out = TimestampedArray()
+        u_safe_out.header = msg.header
+        u_safe_out.array = list(u_safe)
+
+        self.safe_controls_publisher.publish(u_safe_out)
 
     def update_sensor_matrix(self, msg: TimestampedArray):
         # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]
