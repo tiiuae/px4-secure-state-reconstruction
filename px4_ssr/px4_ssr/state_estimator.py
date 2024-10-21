@@ -52,10 +52,17 @@ class StateEstimator(Node):
             self.secure_state_estimator,
             10,
         )
-        self.input_subscriber = self.create_subscription(
+        self.nominal_input_subscriber = self.create_subscription(
             TimestampedArray,
             "/input_matrices",
-            self.update_input_matrix,
+            self.update_nominal_input_matrix,
+            10,
+        )
+        self.safe_input_subscriber = self.create_subscription(
+            TimestampedArray,
+            "/u_safe",
+            # "/input_matrices",
+            self.update_safe_input_matrix,
             10,
         )
         self.estimated_states_publisher = self.create_publisher(
@@ -126,14 +133,17 @@ class StateEstimator(Node):
         if len(self.y_vec) > self.n:
             self.y_vec = self.y_vec[1:]
 
-    def update_input_matrix(self, msg: TimestampedArray):
+    def update_safe_input_matrix(self, msg: TimestampedArray):
         # [[u0], [u1], ... , [un-1]]
-        self.u_vec.append(list(msg.array.data))
-
         # Keep only the last n readings
         # if len(self.u_vec) > self.drone.n:
-        if len(self.u_vec) > self.n:
+        if len(self.u_vec) >= self.n:
+            self.u_vec.append(list(msg.array.data))
             self.u_vec = self.u_vec[1:]
+
+    def update_nominal_input_matrix(self, msg: TimestampedArray):
+        if len(self.u_vec) < self.n:
+            self.u_vec.append(list(msg.array.data))
 
 
 def main(args=None):

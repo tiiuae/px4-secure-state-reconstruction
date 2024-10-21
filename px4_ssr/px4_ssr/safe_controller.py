@@ -93,8 +93,8 @@ class SafeController(Node):
             return
         # Prerequisite is to have enough past readings
         # if len(self.y_vec) < self.drone.n:
-        if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
-            return
+        # if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
+        #     return
         # Reshape flattened
         self.x_est = np.reshape(self.x_est, (self.n, -1))
         self.safe_problem.u_seq = np.array(self.u_vec)
