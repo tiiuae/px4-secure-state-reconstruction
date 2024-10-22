@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
         iproute2 \
         python3-colcon-common-extensions \
         python3-pip \
+        ros-humble-plotjuggler-ros \
         && rm -rf /var/lib/apt/lists/*
 
 RUN sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
