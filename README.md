@@ -142,9 +142,12 @@ RECOMMENDED to write this alias:
 
 ```bash
 # Copy paste as it is
-echo "alias ssr_ros_ws='docker run -it --network=host --ipc=host --pid=host --env UID=\$(id -u) --env GID=\$(id -g) -v ~/ros_workspace:/ros_workspace:rw -w /ros_workspace ssr_ros_ws'" >> ~/.bashrc
+echo "alias ssr_ros_ws='docker run -it --network=host --ipc=host --pid=host --env UID=\$(id -u) --env GID=\$(id -g) -v /tmp/.X11-unix:/tmp/.X11-unix:ro -e DISPLAY=\${DISPLAY} -v ~/ros_workspace:/ros_workspace:rw -w /ros_workspace ssr_ros_ws'" >> ~/.bashrc
 
 source ~/.bashrc
+
+# Note that if you are planning to run GUI packages, preface any command in a terminal with
+xhost +
 ```
 
 We need to first build the workspace:
