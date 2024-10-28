@@ -106,6 +106,10 @@ public:
                         target = 0;
                     }
                 }
+
+                vx = 0.6 * vx;
+                vy = 0.6 * vy;
+
                 /*vx = 1.5 * std::sin(time_counter / Ts);*/
                 /*vy = 1.5 * std::cos(time_counter / Ts);*/
                 /*vx = 1.5 * std::sin(time_counter / Ts);*/

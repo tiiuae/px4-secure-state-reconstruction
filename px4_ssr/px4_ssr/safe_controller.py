@@ -42,15 +42,15 @@ class SafeController(Node):
         self.m: int = self.dtsys_c.shape[0]
 
         self.s = 2
-        self.y_vec = []
+        # self.y_vec = []
         self.u_vec = []
         self.x_array = []
         self.gamma_set = []
         self.start_ssr = False
 
         h = np.vstack([np.identity(self.n),-np.identity(self.n)])
-        q = 10*np.ones((2*self.n,1))
-        gamma = 0.8
+        q = 6*np.ones((2*self.n,1))
+        gamma = 1*TS # tuning parameter
 
         self.safe_problem = SafeProblem(self.dtsys_a, self.dtsys_b, h, q, gamma)
 
@@ -60,12 +60,12 @@ class SafeController(Node):
             self.start_ssr_subscriber,
             self.qos_profile,
         )
-        self.sensor_subscriber = self.create_subscription(
-            TimestampedArray,
-            "/sensor_matrices",
-            self.update_sensor_matrix,
-            10,
-        )
+        # self.sensor_subscriber = self.create_subscription(
+        #     TimestampedArray,
+        #     "/sensor_matrices",
+        #     self.update_sensor_matrix,
+        #     10,
+        # )
         self.estimated_states_subscriber = self.create_subscription(
             TimestampedArray,
             "/estimated_states",
@@ -104,25 +104,27 @@ class SafeController(Node):
         ####### The SSR takes in u_safe not u_nom
         u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est.T)
 
-        print("---")
-        print("u_safe: ", u_safe)
-        print("u_nom: ", self.u_vec[-1])
-        print("flag: ", flag)
-        print("---")
+        # print("---")
+        # print("u_safe: ", u_safe)
+        # print("u_nom: ", self.u_vec[-1])
+        # print("flag: ", flag)
+        # print("---")
+        if np.linalg.norm(u_safe - self.u_vec[-1])>0.1:
+            print(f'u_safe:{u_safe}, u_nom: {self.u_vec[-1]}')
         u_safe_out = TimestampedArray()
         u_safe_out.header = msg.header
         u_safe_out.array.data = list(u_safe)
 
         self.safe_controls_publisher.publish(u_safe_out)
 
-    def update_sensor_matrix(self, msg: TimestampedArray):
-        # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]
-        self.y_vec.append(list(msg.array.data))
+    # def update_sensor_matrix(self, msg: TimestampedArray):
+    #     # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]
+    #     self.y_vec.append(list(msg.array.data))
 
-        # Keep only the last n readings
-        # if len(self.y_vec) > self.drone.n:
-        if len(self.y_vec) > self.n:
-            self.y_vec = self.y_vec[1:]
+    #     # Keep only the last n readings
+    #     # if len(self.y_vec) > self.drone.n:
+    #     if len(self.y_vec) > self.n:
+    #         self.y_vec = self.y_vec[1:]
 
     def update_input_matrix(self, msg: TimestampedArray):
         # [[u0], [u1], ... , [un-1]]

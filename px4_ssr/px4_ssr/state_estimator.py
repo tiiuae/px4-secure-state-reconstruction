@@ -34,7 +34,7 @@ class StateEstimator(Node):
         )
         self.n: int = self.dtsys_a.shape[0]
 
-        self.s = 2
+        self.s = 1
         self.y_vec = []
         self.u_vec = []
         self.gamma_set = []
@@ -99,21 +99,26 @@ class StateEstimator(Node):
             input_sequence=np.array(u_vec),
         )
         ssr_solution = SecureStateReconstruct(ss_problem)
-        possible_states, corresp_sensor, residuals_list = ssr_solution.solve(np.inf)
-        # possible_states, corresp_sensor, residuals_list = ssr_solution.solve(2.0)
-        print("-------------------------------------")
-        print(f"self.s: {self.s}")
-        print(
-            f"dtsys_a: {self.dtsys_a}, \n dtsys_b: {self.dtsys_b}, \n dtsys_c:{self.dtsys_c} "
-        )
-        print(f"output_sequence:{self.y_vec}")
-        print(f"input_sequence:{u_vec}")
-        # print(f'observation matrix: {ssr_solution.obser[:,:,0]}')
-        # print(f'observation matrix: {ssr_solution.obser[:,:,1]}')
-        # print(f'clean output sequence" {ssr_solution.y_his}')
-        print(f"estimated state: {possible_states}")
-        print(f"corresponding sensors:{corresp_sensor}")
-        print(f"residuals_list:{residuals_list}")
+        # possible_states, corresp_sensor, residuals_list = ssr_solution.solve(np.inf)
+        possible_states, corresp_sensor, residuals_list = ssr_solution.solve(20)
+        # print("-------------------------------------")
+        # print(f"self.s: {self.s}")
+        # print(
+        #     f"dtsys_a: {self.dtsys_a}, \n dtsys_b: {self.dtsys_b}, \n dtsys_c:{self.dtsys_c} "
+        # )
+        # print(f"output_sequence:{self.y_vec}")
+        # print(f"input_sequence:{u_vec}")
+        # # print(f'observation matrix: {ssr_solution.obser[:,:,0]}')
+        # # print(f'observation matrix: {ssr_solution.obser[:,:,1]}')
+        # # print(f'clean output sequence" {ssr_solution.y_his}')
+        # print(f"estimated state: {possible_states}")
+        # print(f"corresponding sensors:{corresp_sensor}")
+        # print(f"residuals_list:{residuals_list}")
+
+        # remove duplicat states
+        possible_states = possible_states.transpose()
+        possible_states = ssr_solution.remove_duplicate_states(possible_states)
+        possible_states = np.hstack(possible_states)
 
         estimated_states = TimestampedArray()
         estimated_states.header = msg.header

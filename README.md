@@ -129,7 +129,7 @@ rm -rf install build log
 docker cp temp_container:/ros_workspace/install install
 docker cp temp_container:/ros_workspace/log log
 docker cp temp_container:/ros_workspace/build build
-docker rm temp_container
+docker stop temp_container
 ```
 
 To make it easier for us to develop the solution while testing it, we will
@@ -248,13 +248,14 @@ tampered with, you can simply `git pull` or `git push` normally.
 > 
 > # Run the temp_container instance to copy out the build and install files
 > # This needs to be done ONCE
+> docker rm temp_container
 > docker run -it --name=temp_container ssr_ros_ws /bin/bash &
 > cd ~/ros_workspace
 > rm -rf install build log
 > docker cp temp_container:/ros_workspace/install install
 > docker cp temp_container:/ros_workspace/log log
 > docker cp temp_container:/ros_workspace/build build
-> docker rm temp_container
+> docker stop temp_container
 > ```
 
 # Plan for Implementation

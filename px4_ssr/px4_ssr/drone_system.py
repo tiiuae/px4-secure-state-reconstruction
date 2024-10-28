@@ -7,8 +7,8 @@ import scipy.linalg as linalg
 from cvxopt import matrix, solvers
 
 EPS: float = 1e-6
-TS: float = 0.05
-
+TS: float = 0.1
+TAU: float = 5.0 # 2.0 works
 
 def right_shift_row_array(a, shift_amount):
     """
@@ -42,28 +42,28 @@ class SystemModel:
     def __init__(self):
         self.Ac = np.matrix(
             [
-                [0, 1, 0, 0],  # x
-                [0, 0, 0, 0],  # xdot
-                [0, 0, 1, 0],  # y
-                [0, 0, 0, 0],  # ydot
+                [0, 1, 0, 0],       # x1
+                [0, -1/TAU, 0, 0],  # x1dot
+                [0, 0, 0, 1],       # x2
+                [0, 0, 0, -1/TAU],  # x2dot
             ]
         )
         self.Bc = np.matrix(
             [
-                [1, 0],
-                [0, 0],  # vx
-                [0, 1],  # vy
                 [0, 0],
+                [0, 1/TAU],  # v1_command
+                [0, 0],      # v2_command
+                [0, 1/TAU],
             ]
         )
         self.Cc = np.matrix(
             [
                 [1, 0, 0, 0],
                 [0, 1, 0, 0],
-                [0, 0, 1, 0],  # x
-                [0, 0, 0, 1],  # xdot
-                [1, 0, 0, 0],  # y
-                [0, 1, 0, 0],  # ydot
+                [0, 0, 1, 0],  # x1
+                [0, 0, 0, 1],  # x1dot
+                [1, 0, 0, 0],  # x2
+                [0, 1, 0, 0],  # x2dot
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
             ]
@@ -275,9 +275,13 @@ class SecureStateReconstruct:
         """
         The method solves a given SSR problem and yields possible initial states, currently in a brute-force approach.
         """
+        state_list = []
+        sensor_list = []
+        residual_list = []
+
         possible_states_list = []
         corresp_sensors_list = []
-        residuals_list = []
+        possible_residuals_list = []
         for comb in self.possible_comb:
             # recall obser is in the shape of (io_length, n, p)
             # print(comb)
@@ -298,32 +302,49 @@ class SecureStateReconstruct:
             else:
                 residuals = residuals.item()
 
-            if residuals < error_bound:
-                possible_states_list.append(state)
-                corresp_sensors_list.append(comb)
-                residuals_list.append(residuals)
-                # print(f'residuals: {residuals}')
-                if rank < obser_matrix.shape[1]:
-                    print(
-                        f"Warning: observation matrix for sensors in {comb} is of deficient rank {rank}."
-                    )
+            # if residuals < error_bound:
+            #     possible_states_list.append(state)
+            #     corresp_sensors_list.append(comb)
+            #     possible_residuals_list.append(residuals)
+            #     # print(f'residuals: {residuals}')
+            #     if rank < obser_matrix.shape[1]:
+            #         print(
+            #             f"Warning: observation matrix for sensors in {comb} is of deficient rank {rank}."
+            #         )
+            state_list.append(state)
+            sensor_list.append(comb)
+            residual_list.append(residuals)
 
-        if len(possible_states_list) > 0:
-            # here we remove the states that yields 100x smallest residual
-            residual_min = min(residuals_list)
-            print(f"residual min is {residual_min}")
-            # comb_list = [i for i in range(len(residuals_list)) if residuals_list[i]<10*residual_min]
-            comb_list = [i for i in range(len(residuals_list))]
-            possible_states_list = [possible_states_list[index] for index in comb_list]
-            corresp_sensors_list = [corresp_sensors_list[index] for index in comb_list]
+
+        # if len(possible_states_list) > 0:
+        #     # here we remove the states that yields 100x smallest residual
+        #     residual_min = min(possible_residuals_list)
+        #     print(f"residual min is {residual_min}")
+        #     # comb_list = [i for i in range(len(residuals_list)) if residuals_list[i]<10*residual_min]
+        #     comb_list = [i for i in range(len(possible_residuals_list))]
+        #     possible_states_list = [possible_states_list[index] for index in comb_list]
+        #     corresp_sensors_list = [corresp_sensors_list[index] for index in comb_list]
+        #     possible_states = np.hstack(possible_states_list)
+        #     corresp_sensors = np.array(corresp_sensors_list)
+        # else:
+        #     possible_states = None
+        #     corresp_sensors = None
+        #     print("No possible state found. Consider relax the error bound")
+
+        residual_min = min(residual_list)
+        # print(f"residual min is {residual_min}")
+        if residual_min<min(error_bound,10*residual_min):
+            possible_states_list = [state for residual, state in zip(residual_list, state_list) if residual < error_bound]
+            corresp_sensors_list = [sensors for residual, sensors in zip(residual_list, sensor_list) if residual < error_bound]
             possible_states = np.hstack(possible_states_list)
             corresp_sensors = np.array(corresp_sensors_list)
         else:
-            possible_states = None
-            corresp_sensors = None
-            print("No possible state found. Consider relax the error bound")
+            print("No possible state found. SSR gives the state with smallest residual. Consider relax the error bound")
+            residual_min_index =  residual_list.index( min(residual_list))
+            possible_states = np.reshape(state_list[residual_min_index],(-1,1))
+            corresp_sensors = np.array(sensor_list[residual_min_index])
 
-        return possible_states, corresp_sensors, residuals_list
+        return possible_states, corresp_sensors, possible_residuals_list
 
     def solve(self, error_bound: float = 1.0):
         # Solves for current states
@@ -418,6 +439,22 @@ class SecureStateReconstruct:
 
         # Convert the list to a tuple and use it to slice the array
         return array[tuple(index)]
+    
+    @staticmethod
+    def is_same_state(st1:np.ndarray,st2:np.ndarray):
+        error = st1.flatten() - st2.flatten()
+        # print(f'error norm: {linalg.norm(error)}')
+        if linalg.norm(error)<1e-6:
+            return True
+        return False
+
+    @classmethod
+    def remove_duplicate_states(cls,possible_states):
+        state_lst = [possible_states[0]]
+        for state in possible_states[1:]:
+            if not any(cls.is_same_state(state,st) for st in state_lst):
+                state_lst.append(state)
+        return state_lst
 
 class LinearInequalityConstr:
     """
