@@ -1,3 +1,8 @@
+import itertools
+import threading
+import time
+from geometry_msgs.msg import Point
+
 import numpy as np
 import rclpy
 from px4_offboard_control.msg import TimestampedArray
@@ -48,8 +53,10 @@ class SafeController(Node):
         self.start_ssr = False
         self.reconstruct_state = False
 
+        # The absolute limits to square boundary in 2D
+        self.square_bound = 5
         h = np.vstack([np.identity(self.n),-np.identity(self.n)])
-        q = 6*np.ones((2*self.n,1))
+        q = self.square_bound * np.ones((2*self.n,1))
         gamma = 1*TS # tuning parameter
 
         self.safe_problem = SafeProblem(self.dtsys_a, self.dtsys_b, h, q, gamma)
@@ -87,6 +94,32 @@ class SafeController(Node):
         self.safe_controls_publisher = self.create_publisher(
             TimestampedArray, "/u_safe", 10
         )
+
+        # TODO Temporary boundary publisher, can be deleted after Modularization
+        self.boundary_thread = threading.Thread(target=self.boundary_loop)
+        self.boundary_thread.daemon = True
+        self.boundary_thread.start()
+
+        # TODO Temporary boundary loop, can be deleted after Modularization
+    def boundary_loop(self):
+        self.boundary_publisher = self.create_publisher(Point, "/boundary", 10)
+
+        values = [(self.square_bound, self.square_bound),
+                  (-self.square_bound, self.square_bound),
+                  (-self.square_bound, -self.square_bound),
+                  (self.square_bound, -self.square_bound)
+                  ]
+        cycle = itertools.cycle(values)
+
+        while rclpy.ok():
+            time.sleep(.5)
+            point = Point()
+            x, y = next(cycle)
+            point.x, point.y = float(x), float(y)
+            point.z = 0.
+            self.boundary_publisher.publish(point)
+        return
+
 
     def start_ssr_subscriber(self, msg: Empty):
         self.start_ssr = not self.start_ssr
