@@ -52,6 +52,7 @@ class SafeController(Node):
         self.gamma_set = []
         self.start_ssr = False
         self.reconstruct_state = False
+        self.declare_parameter("state_reconstruction_state", self.reconstruct_state)
 
         # The absolute limits to square boundary in 2D
         self.square_bound = 5
@@ -168,6 +169,7 @@ class SafeController(Node):
 
     def enable_state_reconstruction(self, msg: Bool):
         self.reconstruct_state = msg.data
+        self.set_parameters([rclpy.Parameter("state_reconstruction_state", rclpy.Parameter.Type.BOOL, self.reconstruct_state)])
 
 def main(args=None):
     print("Starting safe_controller node...")

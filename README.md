@@ -353,3 +353,19 @@ State reconstruction can be initialised with this:
 ```bash
 ssr_ros_ws ros2 topic pub -1 /state_reconstruction std_msgs/msg/Bool "data: true" # or "data: false"
 ```
+
+## Querying States
+
+It is possible to query what the state of each of the above systems are by
+getting the appropriate parameter:
+
+```bash
+# Get state of safe controller/safety filter (boolean)
+ros2 param get /offboard_control_xvel safe_control_state
+
+# Get state of attacker (boolean)
+ros2 param get /attacker attacker_state
+
+# Get state of state reconstructor (boolean)
+ros2 param get /safe_controller state_reconstruction_state
+```

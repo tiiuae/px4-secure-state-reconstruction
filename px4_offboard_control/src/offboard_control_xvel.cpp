@@ -6,6 +6,7 @@
 #include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <px4_offboard_control/msg/timestamped_array.hpp>
+#include <rclcpp/parameter.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/empty.hpp>
@@ -50,7 +51,8 @@ public:
         coordinates.emplace_back(std::vector<float>{5., -5.});
 
         start_ssr = false;
-        safe_control = true;
+        this->safe_control = false;
+        this->declare_parameter<bool>("safe_control_state", this->safe_control);
 
         u_safe.push_back(0);
         u_safe.push_back(0);
@@ -292,6 +294,7 @@ void OffboardControlXvel::ssr_start_callback_(std_msgs::msg::Empty _) {
  */
 void OffboardControlXvel::enable_safe_control_callback_(std_msgs::msg::Bool msg) {
     this->safe_control = msg.data;
+    this->set_parameter(rclcpp::Parameter("safe_control_state", this->safe_control));
 }
 
 /**

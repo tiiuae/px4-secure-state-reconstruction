@@ -18,7 +18,8 @@ public:
         rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
         auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5),
                                qos_profile);
-        attack_flag = false;
+        this->attack_flag = false;
+        this->declare_parameter<bool>("attacker_state", this->attack_flag);
 
         attacked_ekf_publisher_ = this->create_publisher<VehicleLocalPosition>(
             "/fmu/out/vehicle_local_position/attacked", qos);
@@ -52,7 +53,7 @@ private:
 
 void Attacker::attack(VehicleLocalPosition &copy) {
     if (attack_flag) {
-        copy.x *= 1;
+        copy.x *= 0.1*1;
         copy.vx *= 1;
         // copy.y *= (1 + dist(generator));
         copy.y *= 1;
@@ -71,6 +72,7 @@ void Attacker::attack(VehicleLocalPosition &copy) {
  */
 void Attacker::attack_trigger(std_msgs::msg::Bool msg) {
     attack_flag = msg.data;
+    this->set_parameter(rclcpp::Parameter("attacker_state", this->attack_flag));
 }
 
 /**
