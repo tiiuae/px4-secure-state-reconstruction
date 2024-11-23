@@ -1,13 +1,13 @@
 import itertools
 from typing import List
 
-import control as ct
 import numpy as np
 import scipy.linalg as linalg
 from cvxopt import matrix, solvers
+from scipy.optimize import minimize
 
 EPS: float = 1e-6
-TS: float = 0.1
+TS: float = 0.05
 TAU: float = 5.0 # 2.0 works
 
 def right_shift_row_array(a, shift_amount):
@@ -51,7 +51,7 @@ class SystemModel:
         self.Bc = np.matrix(
             [
                 [0, 0],
-                [0, 1/TAU],  # v1_command
+                [1/TAU, 0],  # v1_command
                 [0, 0],      # v2_command
                 [0, 1/TAU],
             ]
@@ -176,14 +176,34 @@ class SSProblem:
         """
         From continuous time system (Ac, Bc, Cc, Dc) to discrete-time system (A,B,C,D) with ZOH discretization scheme
         """
-        continuous_sys = ct.ss(Ac, Bc, Cc, Dc)
-        discrete_sys = continuous_sys.sample(ts, method="zoh")
-        return (
-            discrete_sys.A,
-            discrete_sys.B,
-            discrete_sys.C,
-            discrete_sys.D,
-        )
+        # continuous_sys = ct.ss(Ac, Bc, Cc, Dc)
+        # discrete_sys = continuous_sys.sample(ts, method="zoh")
+        # return (
+        #     discrete_sys.A,
+        #     discrete_sys.B,
+        #     discrete_sys.C,
+        #     discrete_sys.D,
+        # )
+
+        # Discretize the system: a clever way to compute Ad and Bd
+        # See https://en.wikipedia.org/wiki/Discretization#Discretization_of_linear_state_space_models
+        # code adapted from scipy.signal._lti_conversion.py
+        em_upper = np.hstack((Ac, Bc))
+
+        # Need to stack zeros under the a and b matrices
+        em_lower = np.hstack((np.zeros((Bc.shape[1], Ac.shape[0])),
+                              np.zeros((Bc.shape[1], Bc.shape[1]))))
+        
+        em = np.vstack((em_upper, em_lower))
+        ms = linalg.expm(ts * em)
+
+        # Dispose of the lower rows
+        ms = ms[:Ac.shape[0], :]
+
+        Ad = ms[:, 0:Ac.shape[1]]
+        Bd = ms[:, Ac.shape[1]:]
+
+        return Ad, Bd, Cc, Dc
 
 
 class SecureStateReconstruct:
@@ -225,9 +245,10 @@ class SecureStateReconstruct:
             for t in range(1, ss_problem.io_length):
                 new_row = Ci @ linalg.fractional_matrix_power(A, t)
                 obser_i = np.vstack((obser_i, new_row))
-            obser_matrix_array[:, :, i : i + 1] = obser_i.reshape(
-                ss_problem.io_length, ss_problem.n, 1
-            )
+            # obser_matrix_array[:, :, i : i + 1] = obser_i.reshape(
+            #     ss_problem.io_length, ss_problem.n, 1
+            # )
+            obser_matrix_array[:, :, i : i + 1] = np.expand_dims(obser_i, axis=-1)
         return obser_matrix_array
 
     def construct_clean_measurement(self):
@@ -333,9 +354,12 @@ class SecureStateReconstruct:
 
         residual_min = min(residual_list)
         # print(f"residual min is {residual_min}")
-        if residual_min<min(error_bound,10*residual_min):
-            possible_states_list = [state for residual, state in zip(residual_list, state_list) if residual < error_bound]
-            corresp_sensors_list = [sensors for residual, sensors in zip(residual_list, sensor_list) if residual < error_bound]
+        if residual_min<error_bound:
+            error_bound_new = min(error_bound,10*residual_min) 
+            possible_states_list = [state for residual, state in zip(residual_list, state_list) if residual < error_bound_new]
+            corresp_sensors_list = [sensors for residual, sensors in zip(residual_list, sensor_list) if residual < error_bound_new]
+            possible_residuals_list = [residual for residual in residual_list if residual < error_bound_new]
+
             possible_states = np.hstack(possible_states_list)
             corresp_sensors = np.array(corresp_sensors_list)
         else:
@@ -343,6 +367,7 @@ class SecureStateReconstruct:
             residual_min_index =  residual_list.index( min(residual_list))
             possible_states = np.reshape(state_list[residual_min_index],(-1,1))
             corresp_sensors = np.array(sensor_list[residual_min_index])
+            possible_residuals_list = [residual_min]
 
         return possible_states, corresp_sensors, possible_residuals_list
 
@@ -491,7 +516,7 @@ class LinearInequalityConstr:
 
 class SafeProblem:
     """
-    This class defines data for safe problem
+    This class defines data for safe control problem
     """
 
     def __init__(self, A, B, h, q, gamma) -> None:
@@ -677,3 +702,151 @@ class SafeProblem:
         if linalg.norm(error)<1e-6:
             return True
         return False
+
+class TimeConstId:
+    """
+    This class specifically identifies the time constant in the first-order actuation dynamics
+
+    >> timeconst_id = TimeConstId()
+    # Estimate Tau
+    >> est_tau = timeconst_id.estimate_Tau(state_previous, state_after, input_sequence)
+    """
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def create_system_matrices(Tau):
+
+        # Define the system matrices
+        A = np.array([
+            [0, 1, 0, 0],
+            [0, -1/Tau, 0, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, -1/Tau]
+        ])
+
+        B = np.array([
+                [0, 0], 
+                [1/Tau, 0], 
+                [0, 0], 
+                [0, 1/Tau]
+            ])
+
+        C = np.zeros((1,A.shape[1]))
+        D = np.zeros((1,B.shape[1]))
+        Ad, Bd, _, _ = SSProblem.convert_ct_to_dt(A,B,C,D,TS)
+
+        return Ad, Bd
+    
+    @classmethod
+    def objective(cls,Tau, state_previous, state_after, input_sequence):
+        try:
+            # Tau = max(1e-10, float(Tau))
+            # Debug information
+            # print(f"Type of Tau: {type(Tau)}")
+            # print(f"Shape of Tau if array: {np.shape(Tau) if hasattr(Tau, 'shape') else 'Not an array'}")
+            # print(f"Value of Tau: {Tau}")
+
+            Tau = Tau.item() if hasattr(Tau, 'item') else Tau
+            Ad, Bd = cls.create_system_matrices(Tau)
+            # Ensure all inputs are numpy arrays with correct shape
+            state_previous = state_previous.reshape(-1, 1)
+            state_after = state_after.reshape(-1, 1)
+            input_sequence = input_sequence.reshape(-1, 1)
+            
+            n = np.shape(Ad)[0]
+            m = np.shape(Bd)[1]
+            time_steps = int(np.shape(state_previous)[0]/n)
+            
+            prediction_lst = []
+            for s in range(time_steps):
+                # Compute prediction
+                state_s = state_previous[n*s:n*(s+1),0:1]
+                input_s = input_sequence[m*s:m*(s+1),0:1]
+                prediction_s = Ad @ state_s  + Bd @ input_s
+                prediction_lst.append(prediction_s)
+            
+            prediction = np.vstack(prediction_lst)
+            # Compute error
+            error = state_after - prediction
+            return np.linalg.norm(error, ord=2)
+        
+        except Exception as e:
+            print(f"Warning: Error in objective function: {str(e)}")
+            return 1e10
+
+    @classmethod   
+    def estimate_Tau(cls,state_previous, state_after, input_sequence, initial_guess=2.0):
+        # Define bounds for Tau (must be positive)
+        bounds = [(1e-10, None)]
+        
+        # Optimization
+        try:
+            result = minimize(
+                lambda x: cls.objective(x,state_previous, state_after, input_sequence),
+                x0=initial_guess,
+                bounds=bounds,
+                method='L-BFGS-B',
+                options={'ftol': 1e-8, 'gtol': 1e-8}
+            )
+            
+            print(f"Estimated Tau: {result.x[0]}")
+            print(f"Final objective value: {result.fun}")
+            print(f"Success: {result.success}")
+            print(f"Message: {result.message}")
+
+            return result.x[0]
+        except Exception as e:
+            raise Exception(f"Error in optimization: {str(e)}")
+        
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Generate random test data
+    np.random.seed(42)  # for reproducibility
+    
+    # Create test model
+    system_model = SystemModel()
+    Ad_true, Bd_true, _, _ = SSProblem.convert_ct_to_dt(system_model.Ac, system_model.Bc, system_model.Cc,system_model.Dc,TS)
+
+    n = 4
+    m = 2
+    time_steps = 4 # number of discrete-time steps
+
+    
+    # Generate test states and input
+    initial_state = np.random.random((4, 1))
+    input_sequence = np.random.random((2*time_steps, 1))
+
+    state_old = initial_state
+    state_previous_lst = []
+    state_after_lst = []
+
+    for s in range(time_steps):
+        # state transition
+        state_new = Ad_true @ state_old + Bd_true @ input_sequence[2*s:2*s+2,0:1]
+        
+        state_previous_lst.append(state_old)
+        state_after_lst.append(state_new)
+
+        state_old = state_new
+    
+    state_previous = np.vstack(state_previous_lst)
+    state_after = np.vstack(state_after_lst)
+
+
+    try:
+        timeconst_id = TimeConstId()
+        # Estimate Tau
+        est_tau = timeconst_id.estimate_Tau(state_previous, state_after, input_sequence)
+        
+        # Verify the solution
+        final_error = timeconst_id.objective(est_tau, 
+                              state_previous, state_after, input_sequence)
+        true_error = timeconst_id.objective(TAU, 
+                              state_previous, state_after, input_sequence)
+        print(f"Final prediction error: {final_error}")
+        print(f"True prediction error: {true_error}")
+        
+    except Exception as e:
+        print(f"Error in main execution: {str(e)}")

@@ -11,11 +11,16 @@
   - [Launch DDS Agent](#launch-dds-agent)
   - [Launch Offboard Control Modules](#launch-offboard-control-modules)
   - [Launch Secure State Reconstruction Nodes](#launch-secure-state-reconstruction-nodes)
-  - [Initiate the Estimator](#initiate-the-estimator)
+  - [Initiate the Regular Controller](#initiate-the-regular-controller)
 - [Updating (in Containers)](#updating-in-containers)
 - [Plan for Implementation](#plan-for-implementation)
   - [Simulation](#simulation)
   - [Hardware](#hardware)
+- [Sequential Initialisation](#sequential-initialisation)
+  - [Start Regular Controller](#start-regular-controller)
+  - [Start Attacker](#start-attacker)
+  - [Start Safe Controller](#start-safe-controller)
+  - [Start State Reconstruction](#start-state-reconstruction)
 <!--toc:end-->
 
 # Installation
@@ -220,7 +225,7 @@ environment.
 ssr_ros_ws ros2 launch px4_ssr ssr_launch.py # This will launch the estimator and filter
 ```
 
-## Initiate the Estimator
+## Initiate the Regular Controller
 
 ```bash
 # in Terminal 5
@@ -312,4 +317,39 @@ subgraph "Drone"
         Nominal_Controller-->|Nominal Control Inputs| Safety_Filter
     end  
 end
+```
+
+# Sequential Initialisation
+
+## Start Regular Controller
+
+The drone will only hover until a toggle is provided:
+
+```bash
+# in Terminal 5
+ssr_ros_ws ros2 topic pub -1 /start_ssr std_msgs/msg/Empty "{}"
+```
+
+## Start Attacker
+
+Attacker can be toggled with this:
+
+```bash
+ssr_ros_ws ros2 topic pub -1 /safe_control std_msgs/msg/Bool "data: true" # or "data: false"
+```
+
+## Start Safe Controller
+
+The standard controller will be used until this is initialised:
+
+```bash
+ssr_ros_ws ros2 topic pub -1 /safe_control std_msgs/msg/Bool "data: true" # or "data: false"
+```
+
+## Start State Reconstruction
+
+State reconstruction can be initialised with this:
+
+```bash
+ssr_ros_ws ros2 topic pub -1 /state_reconstruction std_msgs/msg/Bool "data: true" # or "data: false"
 ```

@@ -1,6 +1,6 @@
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <stdint.h>
 
 #include <iostream>
@@ -26,9 +26,8 @@ public:
             this->create_subscription<VehicleLocalPosition>(
                 "/fmu/out/vehicle_local_position", qos,
                 std::bind(&Attacker::position_callback, this, _1));
-        attack_trigger_subscriber = this->create_subscription<std_msgs::msg::Empty>(
-            /*"/attack_trigger",*/
-            "/start_ssr", qos, std::bind(&Attacker::attack_trigger, this, _1));
+        attack_trigger_subscriber = this->create_subscription<std_msgs::msg::Bool>(
+            "/attack_trigger", qos, std::bind(&Attacker::attack_trigger, this, _1));
         dist = std::normal_distribution<double>(mean, stddev);
     }
 
@@ -38,12 +37,12 @@ private:
     rclcpp::Publisher<VehicleLocalPosition>::SharedPtr attacked_ekf_publisher_;
     rclcpp::Subscription<VehicleLocalPosition>::SharedPtr
     raw_vehicle_position_subscriber;
-    rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
     attack_trigger_subscriber;
 
     void position_callback(VehicleLocalPosition position);
     void attack(VehicleLocalPosition &copy);
-    void attack_trigger(std_msgs::msg::Empty);
+    void attack_trigger(std_msgs::msg::Bool);
 
     const double mean = 0.0;
     const double stddev = 4.0;
@@ -55,7 +54,8 @@ void Attacker::attack(VehicleLocalPosition &copy) {
     if (attack_flag) {
         copy.x *= 1;
         copy.vx *= 1;
-        copy.y *= (1 + dist(generator));
+        // copy.y *= (1 + dist(generator));
+        copy.y *= 1;
         copy.vy *= 1;
     } else {
         copy.x *= 1;
@@ -69,8 +69,8 @@ void Attacker::attack(VehicleLocalPosition &copy) {
  * @brief Obtain local position of vehicle and set the velocity
  * @param position	Position output from the EKF
  */
-void Attacker::attack_trigger(std_msgs::msg::Empty) {
-    attack_flag = !attack_flag;
+void Attacker::attack_trigger(std_msgs::msg::Bool msg) {
+    attack_flag = msg.data;
 }
 
 /**

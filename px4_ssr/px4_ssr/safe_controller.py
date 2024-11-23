@@ -3,7 +3,7 @@ import rclpy
 from px4_offboard_control.msg import TimestampedArray
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Bool
 
 from px4_ssr.drone_system import (
     TS,
@@ -39,14 +39,14 @@ class SafeController(Node):
             )
         )
         self.n: int = self.dtsys_a.shape[0]
-        self.m: int = self.dtsys_c.shape[0]
 
-        self.s = 2
         # self.y_vec = []
         self.u_vec = []
         self.x_array = []
+        self.sensor_vector = []
         self.gamma_set = []
         self.start_ssr = False
+        self.reconstruct_state = False
 
         h = np.vstack([np.identity(self.n),-np.identity(self.n)])
         q = 6*np.ones((2*self.n,1))
@@ -60,12 +60,18 @@ class SafeController(Node):
             self.start_ssr_subscriber,
             self.qos_profile,
         )
-        # self.sensor_subscriber = self.create_subscription(
-        #     TimestampedArray,
-        #     "/sensor_matrices",
-        #     self.update_sensor_matrix,
-        #     10,
-        # )
+        self.reconstruction_subscriber = self.create_subscription(
+            Bool,
+            "/state_reconstruction",
+            self.enable_state_reconstruction,
+            self.qos_profile,
+        )
+        self.sensor_subscriber = self.create_subscription(
+            TimestampedArray,
+            "/sensor_matrices",
+            self.update_sensor_matrix,
+            10,
+        )
         self.estimated_states_subscriber = self.create_subscription(
             TimestampedArray,
             "/estimated_states",
@@ -91,24 +97,16 @@ class SafeController(Node):
 
         if not self.start_ssr:
             return
-        # Prerequisite is to have enough past readings
-        # if len(self.y_vec) < self.drone.n:
-        # if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
-        #     return
+
+        if not self.reconstruct_state:
+            self.x_est = np.array(self.sensor_vector)
+
         # Reshape flattened
         self.x_est = np.reshape(self.x_est, (self.n, -1))
         self.safe_problem.u_seq = np.array(self.u_vec)
-        # For the moment treat u_nom = u_safe
-        # i.e. the safety_filter is running in "open-loop"
-        # TODO: Differentiate between u_nom and u_safe
-        ####### The SSR takes in u_safe not u_nom
+
         u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est.T)
 
-        # print("---")
-        # print("u_safe: ", u_safe)
-        # print("u_nom: ", self.u_vec[-1])
-        # print("flag: ", flag)
-        # print("---")
         if np.linalg.norm(u_safe - self.u_vec[-1])>0.1:
             print(f'u_safe:{u_safe}, u_nom: {self.u_vec[-1]}')
         u_safe_out = TimestampedArray()
@@ -117,14 +115,14 @@ class SafeController(Node):
 
         self.safe_controls_publisher.publish(u_safe_out)
 
-    # def update_sensor_matrix(self, msg: TimestampedArray):
-    #     # [[x0, y0, z0], ... , [xn-1, yn-1, zn-1]]
-    #     self.y_vec.append(list(msg.array.data))
-
-    #     # Keep only the last n readings
-    #     # if len(self.y_vec) > self.drone.n:
-    #     if len(self.y_vec) > self.n:
-    #         self.y_vec = self.y_vec[1:]
+    def update_sensor_matrix(self, msg: TimestampedArray):
+        self.sensor_vector = list(msg.array.data)
+        self.sensor_vector = [
+            (self.sensor_vector[0] + self.sensor_vector[4]) / 2,
+            (self.sensor_vector[1] + self.sensor_vector[5]) / 2,
+            (self.sensor_vector[2] + self.sensor_vector[6]) / 2,
+            (self.sensor_vector[3] + self.sensor_vector[7]) / 2,
+        ]
 
     def update_input_matrix(self, msg: TimestampedArray):
         # [[u0], [u1], ... , [un-1]]
@@ -135,13 +133,8 @@ class SafeController(Node):
         if len(self.u_vec) > self.n:
             self.u_vec = self.u_vec[1:]
 
-    def update_estimated_states(self, msg: TimestampedArray):
-        self.x_array.append(list(msg.array.data))
-
-        # Keep only the last n readings
-        # if len(self.x_vec) > self.drone.n:
-        if len(self.x_array) > self.n:
-            self.x_array = self.x_array[1:]
+    def enable_state_reconstruction(self, msg: Bool):
+        self.reconstruct_state = msg.data
 
 def main(args=None):
     print("Starting safe_controller node...")
