@@ -361,12 +361,12 @@ class SecureStateReconstruct:
             possible_residuals_list = [residual for residual in residual_list if residual < error_bound_new]
 
             possible_states = np.hstack(possible_states_list)
-            corresp_sensors = np.array(corresp_sensors_list)
+            corresp_sensors = corresp_sensors_list
         else:
             print("No possible state found. SSR gives the state with smallest residual. Consider relax the error bound")
             residual_min_index =  residual_list.index( min(residual_list))
             possible_states = np.reshape(state_list[residual_min_index],(-1,1))
-            corresp_sensors = np.array(sensor_list[residual_min_index])
+            corresp_sensors = [sensor_list[residual_min_index]]
             possible_residuals_list = [residual_min]
 
         return possible_states, corresp_sensors, possible_residuals_list

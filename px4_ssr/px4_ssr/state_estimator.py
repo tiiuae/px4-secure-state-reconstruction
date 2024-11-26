@@ -4,8 +4,10 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile
 from std_msgs.msg import Empty
 from px4_offboard_control.msg import TimestampedArray
+from collections import deque
 
-from px4_ssr.drone_system import TS, SecureStateReconstruct, SSProblem, SystemModel
+
+from px4_ssr.drone_system import TS, SecureStateReconstruct, SSProblem, SystemModel,nchoosek
 
 
 class XProb:
@@ -39,6 +41,12 @@ class StateEstimator(Node):
         self.u_vec = []
         self.gamma_set = []
         self.start_ssr = False
+        self.estimator_window = 2*self.n
+        self.residual_bound = 20
+        self.residual_aggregation= {}
+        self.possible_sensor_comb = nchoosek(
+                [i for i in range(self.dtsys_c.shape[0])], self.dtsys_c.shape[0] - self.s
+            )
 
         self.ssr_subscriber = self.create_subscription(
             Empty,
@@ -82,7 +90,7 @@ class StateEstimator(Node):
             return
         # Prerequisite is to have enough past readings
         # if len(self.y_vec) < self.drone.n:
-        if len(self.y_vec) < self.n or len(self.u_vec) < self.n:
+        if len(self.y_vec) < self.estimator_window or len(self.u_vec) < self.estimator_window:
             return
         # Since u_vec should contain the last n-1 inputs and the most current
         # input is zeros/not decided yet.
@@ -98,9 +106,9 @@ class StateEstimator(Node):
             output_sequence=np.array(self.y_vec),
             input_sequence=np.array(u_vec),
         )
-        ssr_solution = SecureStateReconstruct(ss_problem)
+        ssr_solution = SecureStateReconstruct(ss_problem,possible_comb=self.possible_sensor_comb)
         # possible_states, corresp_sensor, residuals_list = ssr_solution.solve(np.inf)
-        possible_states, corresp_sensor, residuals_list = ssr_solution.solve(20)
+        possible_states, corresp_sensor, residuals_list = ssr_solution.solve(self.residual_bound)
         # print("-------------------------------------")
         # print(f"self.s: {self.s}")
         # print(
@@ -114,6 +122,55 @@ class StateEstimator(Node):
         # print(f"estimated state: {possible_states}")
         # print(f"corresponding sensors:{corresp_sensor}")
         # print(f"residuals_list:{residuals_list}")
+
+        # corresp_sensor is a list of lst
+        if len(corresp_sensor) > 1:
+            # do residual aggregation
+            for sensor_ind in range(len(corresp_sensor)):
+                sensors_key = tuple(corresp_sensor[sensor_ind])
+                residual = residuals_list[sensor_ind]        
+                # Initialize the deque if the key is new
+                if sensors_key not in self.residual_aggregation:
+                    self.residual_aggregation[sensors_key] = {'residuals': deque(maxlen=100), 'average': 0,'count': 0}
+                # Add the residual to the deque
+                self.residual_aggregation[sensors_key]['residuals'].append(residual)
+                # Compute the running average
+                self.residual_aggregation[sensors_key]['average'] = sum(
+                    self.residual_aggregation[sensors_key]['residuals']
+                ) / len(self.residual_aggregation[sensors_key]['residuals'])
+                self.residual_aggregation[sensors_key]['count'] += 1
+
+            # find minimal average residual
+            min_average = float('inf')
+            min_count = float('inf')
+            for sensor_ind in range(len(corresp_sensor)):
+                sensors_key = tuple(corresp_sensor[sensor_ind])
+                if self.residual_aggregation[sensors_key]['count']>100 and \
+                    self.residual_aggregation[sensors_key]['average']<min_average:
+                    min_average = self.residual_aggregation[sensors_key]['average']
+                    min_count = self.residual_aggregation[sensors_key]['count']
+
+            # remove some possible sensor combinations based on average residual
+            sensors_to_remove = []
+            for sensor_ind in range(len(corresp_sensor)):
+                sensors_key = tuple(corresp_sensor[sensor_ind])
+                average_res = self.residual_aggregation[sensors_key]['average']
+                count_res =  self.residual_aggregation[sensors_key]['count']
+                print(f'sensor_comb:{sensors_key}, count_res:{count_res},average_res:{average_res}')
+                # a valid sensor combination should be consistent and the corresp. residual ratio should be close to 1
+                if (count_res > 100 and count_res < 0.9*min_count) or average_res > 1.2*min_average:
+                    sensors_to_remove.append(sensor_ind)
+                    print('found a sensor combination to remove')
+
+            possible_states = np.delete(possible_states, sensors_to_remove, axis=1)
+            corresp_sensor_to_remove = [sensors for i, sensors in enumerate(corresp_sensor) if i in sensors_to_remove]
+            residuals_list = [res for i, res in enumerate(residuals_list) if i not in sensors_to_remove]
+
+            set1 = set(tuple(sensors) for sensors in self.possible_sensor_comb )
+            to_remove_set = set(tuple(sensors) for sensors in corresp_sensor_to_remove)
+
+            set_exclusion = set1 - to_remove_set
+            self.possible_sensor_comb = [item for item in set_exclusion]
 
         # remove duplicat states
         possible_states = possible_states.transpose()
@@ -135,19 +192,19 @@ class StateEstimator(Node):
 
         # Keep only the last n readings
         # if len(self.y_vec) > self.drone.n:
-        if len(self.y_vec) > self.n:
+        if len(self.y_vec) > self.estimator_window:
             self.y_vec = self.y_vec[1:]
 
     def update_safe_input_matrix(self, msg: TimestampedArray):
         # [[u0], [u1], ... , [un-1]]
         # Keep only the last n readings
         # if len(self.u_vec) > self.drone.n:
-        if len(self.u_vec) >= self.n:
+        if len(self.u_vec) >= self.estimator_window:
             self.u_vec.append(list(msg.array.data))
             self.u_vec = self.u_vec[1:]
 
     def update_nominal_input_matrix(self, msg: TimestampedArray):
-        if len(self.u_vec) < self.n:
+        if len(self.u_vec) < self.estimator_window:
             self.u_vec.append(list(msg.array.data))
 
 
