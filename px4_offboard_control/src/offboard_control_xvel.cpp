@@ -6,7 +6,9 @@
 #include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <px4_offboard_control/msg/timestamped_array.hpp>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/parameter.hpp>
+#include <rclcpp/parameter_value.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/empty.hpp>
@@ -30,15 +32,34 @@ public:
         offboard_control_mode_publisher_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>("/fmu/in/offboard_control_mode", 10);
         trajectory_setpoint_publisher_ = this->create_publisher<px4_msgs::msg::TrajectorySetpoint>("/fmu/in/trajectory_setpoint", 10);
         vehicle_command_publisher_ = this->create_publisher<px4_msgs::msg::VehicleCommand>("/fmu/in/vehicle_command", 10);
-
-        input_matrix_publisher_ = this->create_publisher<px4_offboard_control::msg::TimestampedArray>("/input_matrices", 10);
-
         ekf_subscriber_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>("/fmu/out/vehicle_local_position", qos, std::bind(&OffboardControlXvel::ekf_callback_, this, std::placeholders::_1));
 
+        input_matrix_publisher_ = this->create_publisher<px4_offboard_control::msg::TimestampedArray>("/input_matrices", 10);
         sensor_matrix_subscriber_ = this->create_subscription<px4_offboard_control::msg::TimestampedArray>("/sensor_matrices", qos, std::bind(&OffboardControlXvel::update_sensor_matrix_callback_, this, std::placeholders::_1));
+        safe_input_subscriber_ = this->create_subscription<px4_offboard_control::msg::TimestampedArray>("/u_safe", qos, std::bind(&OffboardControlXvel::update_safe_control_callback_, this, std::placeholders::_1));
+        estimated_states_subscriber_ = this->create_subscription<px4_offboard_control::msg::TimestampedArray>("/estimated_states", qos, std::bind(&OffboardControlXvel::update_estimated_states_callback_, this, std::placeholders::_1));
+
         ssr_start_subscriber_ = this->create_subscription<std_msgs::msg::Empty>("/start_ssr", qos, std::bind(&OffboardControlXvel::ssr_start_callback_, this, std::placeholders::_1));
         enable_safe_control_subscriber_ = this->create_subscription<std_msgs::msg::Bool>("/safe_control", qos, std::bind(&OffboardControlXvel::enable_safe_control_callback_, this, std::placeholders::_1));
-        safe_input_subscriber = this->create_subscription<px4_offboard_control::msg::TimestampedArray>("/u_safe", qos, std::bind(&OffboardControlXvel::update_safe_control_callback_, this, std::placeholders::_1));
+        enable_state_reconstructor_subscriber_ = this->create_subscription<std_msgs::msg::Bool>("/state_reconstruction", qos, std::bind(&OffboardControlXvel::enable_state_reconstruction_callback_, this, std::placeholders::_1));
+
+
+        parameters_client_ = std::make_shared<rclcpp::SyncParametersClient>(this, "state_estimator");
+        while (!parameters_client_->wait_for_service(std::chrono::seconds(1))) {
+            if (!rclcpp::ok()) {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service. Exiting.");
+                return; 
+            }
+            RCLCPP_INFO(this->get_logger(),  
+                        "service not available, waiting again...");  
+        }
+        // 4. Get the parameter value
+        std::vector<rclcpp::Parameter> parameters = parameters_client_->get_parameters({"system_model/A/dim/row",
+                                                                                        "system_model/B/dim/column",
+                                                                                        "system_model/C/dim/row"});
+        this->n = parameters[0].get_value<int>();
+        this->m = parameters[1].get_value<int>();
+        this->p = parameters[2].get_value<int>();
 
         sampling_freq = 20; // in Hertz
         offboard_setpoint_counter_ = 0;
@@ -52,6 +73,7 @@ public:
 
         start_ssr = false;
         this->safe_control = false;
+        this->state_reconstruction = false;
         this->declare_parameter<bool>("safe_control_state", this->safe_control);
 
         u_safe.push_back(0);
@@ -170,25 +192,29 @@ public:
 private:
     rclcpp::TimerBase::SharedPtr timer_;
 
+    rclcpp::SyncParametersClient::SharedPtr parameters_client_;
+
     rclcpp::Publisher<px4_offboard_control::msg::TimestampedArray>::SharedPtr input_matrix_publisher_;
     rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_control_mode_publisher_;
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr ekf_subscriber_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr enable_safe_control_subscriber_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr enable_state_reconstructor_subscriber_;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr ssr_start_subscriber_;
-    rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr attacked_subscriber;
+    rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr attacked_subscriber_;
     rclcpp::Subscription<px4_offboard_control::msg::TimestampedArray>::SharedPtr sensor_matrix_subscriber_;
-    rclcpp::Subscription<px4_offboard_control::msg::TimestampedArray>::SharedPtr safe_input_subscriber;
+    rclcpp::Subscription<px4_offboard_control::msg::TimestampedArray>::SharedPtr safe_input_subscriber_;
+    rclcpp::Subscription<px4_offboard_control::msg::TimestampedArray>::SharedPtr estimated_states_subscriber_;
 
     px4_msgs::msg::VehicleLocalPosition position;
 
     uint64_t offboard_setpoint_counter_; //!< counter for the number of setpoints sent
     float vx, vy, vz, sampling_freq, threshold, dvx, dvy, prev_vx, prev_vy, new_vx, new_vy;
-    int target;
-    bool start_ssr, safe_control;
+    int target, n, m, p;
+    bool start_ssr, safe_control, state_reconstruction;
     std::vector<std::vector<float>> coordinates;
-    px4_offboard_control::msg::TimestampedArray states;
+    px4_offboard_control::msg::TimestampedArray states, estimated_states;
     std::vector<float> u_safe;
 
     void publish_offboard_control_mode();
@@ -197,8 +223,10 @@ private:
     void attacked_callback(px4_msgs::msg::VehicleLocalPosition msg);
     void ssr_start_callback_(std_msgs::msg::Empty msg);
     void enable_safe_control_callback_(std_msgs::msg::Bool msg);
+    void enable_state_reconstruction_callback_(std_msgs::msg::Bool msg);
     void update_safe_control_callback_(px4_offboard_control::msg::TimestampedArray msg);
     void update_sensor_matrix_callback_(px4_offboard_control::msg::TimestampedArray msg);
+    void update_estimated_states_callback_(px4_offboard_control::msg::TimestampedArray msg);
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
     void state_merger(px4_msgs::msg::VehicleLocalPosition &output);
 };
@@ -272,50 +300,131 @@ void OffboardControlXvel::publish_vehicle_command(uint16_t command,
 }
 
 /**
- * @brief Obtain and store sensor output from one of the EKFs
- * @param msg Position output from the EKF
+ * @brief Callback function for receiving EKF position data.
+ * 
+ * Function triggered when a new message is received on the 
+ * `vehicle_local_position` topic. It stores the received position data 
+ * in the `position` member variable.
+ * 
+ * @param msg The `VehicleLocalPosition` message containing the EKF output.
  */
-void OffboardControlXvel::ekf_callback_(
-    px4_msgs::msg::VehicleLocalPosition msg) {
+void OffboardControlXvel::ekf_callback_(px4_msgs::msg::VehicleLocalPosition msg) {
     this->position = msg;
 }
 
 /**
- * @brief Obtain and shift the state of state reconstruction event input
- * @param msg Empty trigger
+ * @brief Callback function to toggle the state reconstruction event.
+ * 
+ * Function triggered when an empty message is received on the 
+ * `/start_ssr` topic. It toggles the `start_ssr` boolean member variable, 
+ *  starting or stopping the control loop.
+ * 
+ * @param msg An empty message (not used).
  */
 void OffboardControlXvel::ssr_start_callback_(std_msgs::msg::Empty _) {
     this->start_ssr = !this->start_ssr;
 }
 
 /**
- * @brief Alternate between the safe and nominal control (True at start)
- * @param msg Bool safe control state
+ * @brief Callback function to enable/disable safe control mode.
+ * 
+ * Function triggered when a boolean message is received on the 
+ * `enable_safe_control` topic. It updates the `safe_control` member 
+ * variable with the received value and also sets the `safe_control_state` 
+ * parameter on the parameter server.
+ * 
+ * @param msg A boolean message indicating whether to enable or disable 
+ *            safe control mode.
  */
 void OffboardControlXvel::enable_safe_control_callback_(std_msgs::msg::Bool msg) {
     this->safe_control = msg.data;
     this->set_parameter(rclcpp::Parameter("safe_control_state", this->safe_control));
 }
 
+
 /**
- * @brief Obtain local position of vehicle at attacked sensor
- * @param position	Position output from the EKF
+ * @brief Merge sensor data or estimated states to determine vehicle position.
+ * 
+ * This function calculates the vehicle's local position based on either:
+ *  - Raw sensor data (if state reconstruction is off)
+ *  - Estimated states from the state reconstructor (if state reconstruction is on)
+ * 
+ * The calculated position is stored in the provided `output` parameter.
+ * 
+ * @param output A reference to a `VehicleLocalPosition` message where the 
+ *               calculated position will be stored.
  */
 void OffboardControlXvel::state_merger(px4_msgs::msg::VehicleLocalPosition &output) {
-    output.x = states.array.data[0] + states.array.data[4];
-    output.y = states.array.data[2] + states.array.data[6];
+    if (this->state_reconstruction && this->estimated_states.array.data.size()>0) {
+        int combinations = static_cast<int>(this->estimated_states.array.data.size() / this->n);
+        for (int i = 0; i < combinations; i++){
+            output.x += this->estimated_states.array.data[0 + 4*i];
+            output.y += this->estimated_states.array.data[2 + 4*i];
+        }
 
-    output.x /= 2;
-    output.y /= 2;
+        output.x /= combinations;
+        output.y /= combinations;
+    } else {
+        output.x = states.array.data[0] + states.array.data[4];
+        output.y = states.array.data[2] + states.array.data[6];
+
+        output.x /= 2;
+        output.y /= 2;
+    }
 }
 
+/**
+ * @brief Callback function to update the safe control input.
+ * 
+ * Function triggered when a new message is received on the
+ * `update_safe_control` topic. It extracts the safe control input values from
+ * the message and stores them in the `u_safe` array.
+ * 
+ * @param msg A `TimestampedArray` message containing the safe control input.
+ */
 void OffboardControlXvel::update_safe_control_callback_(px4_offboard_control::msg::TimestampedArray msg) {
     u_safe[0] = msg.array.data[0];
     u_safe[1] = msg.array.data[1];
 }
 
+/**
+ * @brief Callback function to update the sensor matrix.
+ * 
+ * Function triggered when a new message is received on the
+ * `/sensor_matrices` topic. It stores the received sensor data in the
+ * `states` member variable.
+ * 
+ * @param msg A `TimestampedArray` message containing the sensor matrix data.
+ */
 void OffboardControlXvel::update_sensor_matrix_callback_(px4_offboard_control::msg::TimestampedArray msg) {
     this->states = msg;
+}
+
+/**
+ * @brief Callback function to enable/disable state reconstruction.
+ * 
+ * Function triggered when a boolean message is received on the
+ * `/state_reconstruction` topic. It updates the `state_reconstruction`
+ * member variable with the received value.
+ * 
+ * @param msg A boolean message indicating whether to enable or disable 
+ *            state reconstruction.
+ */
+void OffboardControlXvel::enable_state_reconstruction_callback_(std_msgs::msg::Bool msg) {
+    this->state_reconstruction = msg.data;
+}
+
+/**
+ * @brief Callback function to update the estimated states.
+ *
+ * Function triggered when a new message is received on the
+ * `/estimated_states` topic. It stores the received estimated states in
+ * the `estimated_states` member variable.
+ *
+ * @param msg A `TimestampedArray` message containing the estimated states.
+ */
+void OffboardControlXvel::update_estimated_states_callback_(px4_offboard_control::msg::TimestampedArray msg) {
+    this->estimated_states = msg;
 }
 
 int main(int argc, char *argv[]) {
