@@ -1,0 +1,19 @@
+"/attacker":
+  ros__parameters:
+    x:
+      attack: false
+      attack_type: "" # shift, scale, const, noise
+      attack_param: 0.0
+    y:
+      attack: false
+      attack_type: "" # shift, scale, const, noise
+      attack_param: 0.0
+    vx:
+      attack: false
+      attack_type: "" # shift, scale, const, noise
+      attack_param: 0.0
+    vy:
+      attack: false
+      attack_type: "" # shift, scale, const, noise
+      attack_param: 0.0
+

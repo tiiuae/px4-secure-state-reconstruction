@@ -1,7 +1,14 @@
+from ament_index_python.packages import get_package_share_directory
+import os
 import launch
 import launch_ros.actions
 
 def generate_launch_description():
+    config = os.path.join(
+        get_package_share_directory('px4_offboard_control'),
+        'config',
+        'attacker_params.yaml'
+        )
     return launch.LaunchDescription([
         launch_ros.actions.Node(
             package='px4_offboard_control',
@@ -14,7 +21,7 @@ def generate_launch_description():
             executable='attacker',
             output='screen',
             parameters=[
-                {"attack": True},
+                config
             ],
             name='attacker'),
 
