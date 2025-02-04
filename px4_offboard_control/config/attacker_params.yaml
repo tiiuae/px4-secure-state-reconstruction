@@ -2,8 +2,8 @@
   ros__parameters:
     x:
       attack: false
-      attack_type: "" # shift, scale, const, noise
-      attack_param: 0.0
+      attack_type: "scale" # shift, scale, const, noise
+      attack_param: 0.2
     y:
       attack: false
       attack_type: "" # shift, scale, const, noise

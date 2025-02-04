@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 import scipy.linalg as linalg
 from cvxopt import matrix, solvers
-from scipy.optimize import minimize
+from scipy.optimize import minimize,linprog
 
 EPS: float = 1e-6
 TS: float = 0.05
@@ -313,15 +313,40 @@ class SecureStateReconstruct:
             # print(f'corresponding measurement is \n {measure_vec}')
 
             # print(f'Observation matrix shape {obser_matrix.shape}, measure_vec shape {measure_vec.shape}')
-            state, residuals, rank, _ = linalg.lstsq(obser_matrix, measure_vec)
+            # state, residuals, rank, _ = linalg.lstsq(obser_matrix, measure_vec)
 
-            if len(residuals) < 1:
-                # print(f'combinations: {comb}')
-                residuals = (
-                    linalg.norm(obser_matrix @ state - measure_vec, ord=2) ** 2
-                )
-            else:
-                residuals = residuals.item()
+            # sovle for the initial state using linear programming instead of least square
+            # proposed in the IROS 2025 paper
+            # A_ub * x <= b_ub
+            obser_matrix_m, obser_matrix_n = obser_matrix.shape
+            linprog_c = np.zeros(obser_matrix_n+1)
+            linprog_c[-1] = 1
+
+            linprog_A1 = np.hstack([-obser_matrix,-np.ones((obser_matrix_m,1))])
+            linprog_b1 = - measure_vec
+
+            linprog_A2 = np.hstack([obser_matrix, -np.ones((obser_matrix_m,1))])
+            linprog_b2 = measure_vec
+
+            linprog_A = np.vstack([linprog_A1,linprog_A2])
+            linprog_b = np.vstack([linprog_b1,linprog_b2])
+            bounds = [(None,None)]*obser_matrix_n + [(0,None)]
+
+            result = linprog(linprog_c, A_ub=linprog_A, b_ub=linprog_b, bounds=bounds, method='highs')
+
+            if result.success:
+                state = result.x[:-1]
+                state = state.reshape(-1,1) # 2-D column vector
+                residuals = result.x[-1]
+                rank = np.linalg.matrix_rank(obser_matrix)
+
+            # if len(residuals) < 1:
+            #     # print(f'combinations: {comb}')
+            #     residuals = (
+            #         linalg.norm(obser_matrix @ state - measure_vec, ord=2) ** 2
+            #     )
+            # else:
+            #     residuals = residuals.item()
 
             # if residuals < error_bound:
             #     possible_states_list.append(state)
@@ -519,7 +544,7 @@ class SafeProblem:
     This class defines data for safe control problem
     """
 
-    def __init__(self, A, B, h, q, gamma) -> None:
+    def __init__(self, A, B, h, q, gamma,robust_level = 0.01) -> None:
         assert gamma >= 0
         assert gamma <= 1
 
@@ -537,6 +562,7 @@ class SafeProblem:
         self.h = h
         self.q = q
         self.gamma = gamma
+        self.robust_level = robust_level
 
         # according to (7) of the note "Safety of linear systems under sensor attacks without state estimation
         self.k = (1 - gamma) * h @ np.linalg.matrix_power(
@@ -550,6 +576,7 @@ class SafeProblem:
             self.h @ self.A @ state
             + self.q
             - (1 - self.gamma) * (self.h @ state + self.q)
+            - self.robust_level*np.ones(self.q.shape)
         )
         return LinearInequalityConstr(a_mat, b_vec)
 
