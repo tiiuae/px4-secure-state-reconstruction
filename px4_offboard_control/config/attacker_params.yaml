@@ -1,7 +1,7 @@
 "/attacker":
   ros__parameters:
     x:
-      attack: false
+      attack: true
       attack_type: "scale" # shift, scale, const, noise
       attack_param: 0.2
     y:

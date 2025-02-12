@@ -32,7 +32,7 @@ class SafeController(Node):
     """
 
     def __init__(self):
-        super().__init__("state_estimator", parameter_overrides=[])
+        super().__init__("safe_controller", parameter_overrides=[])
 
         self.qos_profile = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5)
         system_model = SystemModel()
@@ -55,7 +55,7 @@ class SafeController(Node):
         self.declare_parameter("state_reconstruction_state", self.reconstruct_state)
 
         # The absolute limits to square boundary in 2D
-        self.square_bound = 5
+        self.square_bound = 5.1
         h = np.vstack([np.identity(self.n),-np.identity(self.n)])
         q = self.square_bound * np.ones((2*self.n,1))
         gamma = 1*TS # tuning parameter

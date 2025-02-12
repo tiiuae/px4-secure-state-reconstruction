@@ -4,6 +4,7 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile
 from std_msgs.msg import Empty
 from px4_offboard_control.msg import TimestampedArray
+from px4_msgs.msg import TrajectorySetpoint
 from collections import deque
 
 
@@ -74,24 +75,32 @@ class StateEstimator(Node):
             self.secure_state_estimator,
             10,
         )
-        self.nominal_input_subscriber = self.create_subscription(
-            TimestampedArray,
-            "/input_matrices",
-            self.update_nominal_input_matrix,
-            10,
-        )
-        self.safe_input_subscriber = self.create_subscription(
-            TimestampedArray,
-            "/u_safe",
-            # "/input_matrices",
-            self.update_safe_input_matrix,
-            10,
-        )
+
+        # self.nominal_input_subscriber = self.create_subscription(
+        #     TimestampedArray,
+        #     "/input_matrices",
+        #     self.update_nominal_input_matrix,
+        #     10,
+        # )
+        # self.safe_input_subscriber = self.create_subscription(
+        #     TimestampedArray,
+        #     "/u_safe",
+        #     # "/input_matrices",
+        #     self.update_safe_input_matrix,
+        #     10,
+        # )
+
         self.estimated_states_publisher = self.create_publisher(
             TimestampedArray, "/estimated_states", 10
         )
         self.residuals_publisher = self.create_publisher(
             TimestampedArray, "/residuals_list", 10
+        )
+        self.control_signal = self.create_subscription(
+            TrajectorySetpoint,
+            "/fmu/in/trajectory_setpoint",
+            self.update_input_matrix,
+            10
         )
 
     def start_ssr_subscriber(self, msg: Empty):
@@ -217,17 +226,22 @@ class StateEstimator(Node):
         if len(self.y_vec) > self.estimator_window:
             self.y_vec = self.y_vec[1:]
 
-    def update_safe_input_matrix(self, msg: TimestampedArray):
+    # def update_safe_input_matrix(self, msg: TimestampedArray):
         # [[u0], [u1], ... , [un-1]]
         # Keep only the last n readings
         # if len(self.u_vec) > self.drone.n:
-        if len(self.u_vec) >= self.estimator_window:
-            self.u_vec.append(list(msg.array.data))
-            self.u_vec = self.u_vec[1:]
+        # if len(self.u_vec) >= self.estimator_window:
+        #     self.u_vec.append(list(msg.array.data))
+        #     self.u_vec = self.u_vec[1:]
 
-    def update_nominal_input_matrix(self, msg: TimestampedArray):
-        if len(self.u_vec) < self.estimator_window:
-            self.u_vec.append(list(msg.array.data))
+    # def update_nominal_input_matrix(self, msg: TimestampedArray):
+    #     if len(self.u_vec) < self.estimator_window:
+    #         self.u_vec.append(list(msg.array.data))
+
+    def update_input_matrix(self, msg: TrajectorySetpoint):
+        self.u_vec.append(list(msg.velocity)[:2])
+        if len(self.u_vec) >= self.estimator_window:
+            self.u_vec = self.u_vec[1:]
 
 
 def main(args=None):
