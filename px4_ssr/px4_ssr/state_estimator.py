@@ -240,7 +240,7 @@ class StateEstimator(Node):
 
     def update_input_matrix(self, msg: TrajectorySetpoint):
         self.u_vec.append(list(msg.velocity)[:2])
-        if len(self.u_vec) >= self.estimator_window:
+        if len(self.u_vec) > self.estimator_window:
             self.u_vec = self.u_vec[1:]
 
 
