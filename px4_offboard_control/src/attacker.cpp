@@ -100,7 +100,7 @@ float Attacker::attack_state(std::string attack_type, float value, double attack
     } else if (attack_type == "const") {
         value = static_cast<float>(attack_param);
     } else if (attack_type == "noise") {
-        value = static_cast<float>(value * (1 + dist(generator)));
+        value = static_cast<float>(value + dist(generator));
     }
     return value;
 }
