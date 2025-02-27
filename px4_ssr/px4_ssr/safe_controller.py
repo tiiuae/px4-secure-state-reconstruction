@@ -55,7 +55,7 @@ class SafeController(Node):
         self.declare_parameter("state_reconstruction_state", self.reconstruct_state)
 
         # The absolute limits to square boundary in 2D
-        self.square_bound = 5.1
+        self.square_bound = 6.0
         h = np.vstack([np.identity(self.n),-np.identity(self.n)])
         q = self.square_bound * np.ones((2*self.n,1))
         gamma = 1*TS # tuning parameter
@@ -136,10 +136,11 @@ class SafeController(Node):
             self.x_est = np.array(self.sensor_vector)
 
         # Reshape flattened
-        self.x_est = np.reshape(self.x_est, (self.n, -1))
+        self.x_est = np.reshape(self.x_est,(-1,self.n))
         self.safe_problem.u_seq = np.array(self.u_vec)
 
-        u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est.T)
+        # u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est.T)
+        u_safe, lic, flag = self.safe_problem.cal_safe_control(np.array(self.u_vec[-1]), self.x_est)
 
         if np.linalg.norm(u_safe - self.u_vec[-1])>0.1:
             print(f'u_safe:{u_safe}, u_nom: {self.u_vec[-1]}')

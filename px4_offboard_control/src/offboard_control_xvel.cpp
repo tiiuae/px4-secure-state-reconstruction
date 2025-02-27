@@ -65,11 +65,11 @@ public:
         offboard_setpoint_counter_ = 0;
         position = px4_msgs::msg::VehicleLocalPosition();
 
-        std::vector<float> point = {5., 5.};
+        std::vector<float> point = {5.7, 5.7};
         coordinates.push_back(point);
-        coordinates.emplace_back(std::vector<float>{-5., 5.});
-        coordinates.emplace_back(std::vector<float>{-5., -5.});
-        coordinates.emplace_back(std::vector<float>{5., -5.});
+        coordinates.emplace_back(std::vector<float>{-5.7, 5.7});
+        coordinates.emplace_back(std::vector<float>{-5.7, -5.7});
+        coordinates.emplace_back(std::vector<float>{5.7, -5.7});
 
         start_ssr = false;
         this->safe_control = false;
